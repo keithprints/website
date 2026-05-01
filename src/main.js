@@ -1,0 +1,236 @@
+import { fetchProducts } from './lib/supabase.js';
+import { renderCatalog } from './components/catalog.js';
+import { openBuyModal } from './components/buyModal.js';
+
+// ============ APP STATE ============
+const state = {
+  products: [],
+  activeCategory: 'all',
+  searchQuery: '',
+  loading: true,
+};
+
+// ============ INITIAL RENDER ============
+function renderShell() {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <nav class="nav">
+      <div class="nav-inner">
+        <a href="#top" class="nav-logo">
+          <span class="logo-mark">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 7L12 3L20 7V17L12 21L4 17V7Z" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
+              <path d="M4 7L12 11M12 11L20 7M12 11V21" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          Keith<b>Prints</b>
+        </a>
+        <ul class="nav-links">
+          <li><a href="#shop">Shop</a></li>
+          <li><a href="#how">How It Works</a></li>
+          <li><a href="#about">About Keith</a></li>
+          <li><a href="#contact">Contact</a></li>
+        </ul>
+      </div>
+    </nav>
+
+    <section class="hero" id="top">
+      <div class="hero-banner">
+        <img src="/banner.jpg" alt="Keith Prints — cool things, 3D printed, just for you" />
+        <div class="hero-stickers">
+          <div class="sticker sticker-new">⚡ MADE TO ORDER</div>
+          <div class="sticker sticker-ship">🚀 SHIPS IN A WEEK</div>
+        </div>
+      </div>
+      <div class="marquee">
+        <div class="marquee-track" id="marqueeTrack"></div>
+      </div>
+    </section>
+
+    <section class="intro" id="about">
+      <div class="intro-card">
+        <h3>I'm Keith, and I make stuff that's actually cool.</h3>
+        <p>I'm 12. I have two 3D printers in my garage and I print every single order myself. No factories, no boring corporate stuff.</p>
+        <p>Pick something, I'll print it for you, and it'll show up at your door in about a week. Easy.</p>
+      </div>
+      <div class="intro-headline">
+        <h2>Print stuff. <em>Trade stuff.</em><br><span class="hl">Show off</span> at school.</h2>
+        <p>From keychains for your backpack to fidgets for math class, every piece is hand-printed and ready to be your new favorite thing. Pick a color, click a button, done.</p>
+      </div>
+    </section>
+
+    <section class="catalog" id="shop">
+      <div class="catalog-head">
+        <h2>The Shop
+          <small id="catalogCount">Loading…</small>
+        </h2>
+        <div class="search">
+          <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>
+          </svg>
+          <input id="searchInput" type="text" placeholder="Search dragons, fidgets..." autocomplete="off" />
+        </div>
+      </div>
+
+      <div class="pills" id="pills">
+        <button class="pill active" data-cat="all"><span class="dot-icon"></span> Everything</button>
+        <button class="pill" data-cat="keychains"><span class="dot-icon"></span> Keychains</button>
+        <button class="pill" data-cat="fidgets"><span class="dot-icon"></span> Fidgets</button>
+        <button class="pill" data-cat="figurines"><span class="dot-icon"></span> Figurines</button>
+        <button class="pill" data-cat="ornaments"><span class="dot-icon"></span> Ornaments</button>
+        <button class="pill" data-cat="more"><span class="dot-icon"></span> & More</button>
+      </div>
+
+      <div class="grid" id="grid"></div>
+    </section>
+
+    <section class="how" id="how">
+      <div class="how-inner">
+        <div class="how-head">
+          <span class="kicker">HOW IT WORKS</span>
+          <h2>Three steps, <em>then it's yours.</em></h2>
+          <p>No subscriptions, no weird sign-ups. Just a kid, a printer, and the thing you ordered.</p>
+        </div>
+        <div class="steps">
+          <div class="step">
+            <span class="step-num">01</span>
+            <h3>Pick Your Print</h3>
+            <p>Browse the shop. Pick a color. Click "Buy Now" and check out securely with Stripe.</p>
+          </div>
+          <div class="step">
+            <span class="step-num">02</span>
+            <h3>I Print It</h3>
+            <p>I get the order on my phone, fire up the printer, and start making your stuff. Most prints take 4-12 hours.</p>
+          </div>
+          <div class="step">
+            <span class="step-num">03</span>
+            <h3>It Lands At Your Door</h3>
+            <p>I package it up with a little thank-you note and ship it. You'll have it within a week. Bam.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer id="contact">
+      <div class="foot-inner">
+        <h4>Keith<span style="color:var(--blue)">Prints</span></h4>
+        <p>Cool things, 3D printed in a garage in Ohio, just for you.</p>
+        <div class="foot-links">
+          <a href="#shop">Shop</a>
+          <a href="#how">How It Works</a>
+          <a href="#about">About</a>
+          <a href="mailto:hi@keithprints.example">Email Keith</a>
+        </div>
+        <div class="foot-bottom">
+          Made with <span class="heart">♥</span> by Keith — © 2026 Keith Prints
+        </div>
+      </div>
+    </footer>
+  `;
+
+  // Marquee
+  renderMarquee();
+
+  // Wire up category pills
+  document.querySelectorAll('.pill').forEach(p => {
+    p.addEventListener('click', () => {
+      document.querySelectorAll('.pill').forEach(x => x.classList.remove('active'));
+      p.classList.add('active');
+      state.activeCategory = p.dataset.cat;
+      renderCatalog(state, handleBuy);
+    });
+  });
+
+  // Wire up search
+  document.getElementById('searchInput').addEventListener('input', e => {
+    state.searchQuery = e.target.value.toLowerCase().trim();
+    renderCatalog(state, handleBuy);
+  });
+}
+
+function renderMarquee() {
+  const items = [
+    '⚡ MADE TO ORDER',
+    '🎨 PICK YOUR COLOR',
+    '📦 SHIPS IN A WEEK',
+    '🏠 PRINTED IN OHIO',
+    '💯 KID-RUN, KID-APPROVED',
+    '🚀 NEW DROPS EVERY MONTH',
+  ];
+  const single = items.map(i => `<span><span class="dot">◆</span>${i}</span>`).join('');
+  document.getElementById('marqueeTrack').innerHTML = single + single;
+}
+
+// ============ BUY HANDLER ============
+function handleBuy(product) {
+  openBuyModal(product, async (orderData) => {
+    // orderData = { color, customizationText }
+    try {
+      showToast('Redirecting to checkout…', '🚀');
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: product.id,
+          color: orderData.color,
+          customizationText: orderData.customizationText,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Checkout failed');
+      }
+      const { url } = await res.json();
+      window.location.href = url;
+    } catch (err) {
+      console.error(err);
+      showToast(`Couldn't start checkout: ${err.message}`, '⚠️');
+    }
+  });
+}
+
+// ============ TOAST ============
+let toastTimeout;
+export function showToast(msg, emoji = '✨') {
+  const root = document.getElementById('toast-root');
+  root.innerHTML = `
+    <div class="toast show">
+      <span class="toast-emoji">${emoji}</span>
+      <span>${msg}</span>
+    </div>
+  `;
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => {
+    const t = root.querySelector('.toast');
+    if (t) t.classList.remove('show');
+    setTimeout(() => { root.innerHTML = ''; }, 400);
+  }, 2800);
+}
+
+// ============ THANK YOU PAGE HANDLING ============
+function checkThankYou() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('checkout') === 'success') {
+    setTimeout(() => {
+      showToast(`Order placed! Keith is firing up the printer 🎉`, '✓');
+    }, 500);
+    // Clean the URL
+    window.history.replaceState({}, '', window.location.pathname);
+  } else if (params.get('checkout') === 'cancelled') {
+    setTimeout(() => {
+      showToast('No worries — your cart is safe.', '👋');
+    }, 500);
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+}
+
+// ============ INIT ============
+async function init() {
+  renderShell();
+  state.products = await fetchProducts();
+  state.loading = false;
+  renderCatalog(state, handleBuy);
+  checkThankYou();
+}
+
+init();
