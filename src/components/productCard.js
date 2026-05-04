@@ -20,7 +20,7 @@ export function renderProductCard(p) {
     : `<div class="emoji">${CATEGORY_EMOJI[p.category] || '🎁'}</div>`;
 
   return `
-    <article class="product" data-cat="${p.category}">
+    <article class="product" data-id="${p.id}" data-cat="${p.category}" tabindex="0" role="button" aria-label="View ${escapeHtml(p.name)} details">
       ${badgeHtml}
       <div class="product-img" style="background:${categoryGradient(p.category)}">${imageHtml}</div>
       <div class="product-body">
@@ -29,10 +29,10 @@ export function renderProductCard(p) {
         <p class="product-desc">${escapeHtml(p.description || '')}</p>
         <div class="product-foot">
           <div class="product-price">$${dollars}<span class="cents">.${change}</span></div>
-          <button class="buy-btn" data-id="${p.id}">
+          <span class="buy-btn" data-id="${p.id}">
             BUY NOW
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
-          </button>
+          </span>
         </div>
       </div>
     </article>

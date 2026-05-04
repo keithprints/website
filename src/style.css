@@ -422,7 +422,7 @@ img { max-width: 100%; display: block; }
 .step h3 { font-family: 'Bungee', sans-serif; font-size: 22px; margin-bottom: 10px; }
 .step p { font-size: 15px; color: rgba(255,255,255,0.75); }
 
-/* ============ BUY MODAL ============ */
+/* ============ MODAL (shared shell) ============ */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -444,25 +444,108 @@ img { max-width: 100%; display: block; }
   overflow-y: auto;
   box-shadow: 12px 12px 0 var(--ink);
   animation: modalIn 0.25s ease;
+  position: relative;
 }
 @keyframes modalIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
-.modal-head { padding: 24px 28px 18px; border-bottom: 2px dashed var(--ink); }
-.modal-head h3 { font-family: 'Bungee', sans-serif; font-size: 26px; margin-bottom: 4px; line-height: 1.1; }
-.modal-head p { color: var(--muted); font-size: 14px; }
-.modal-body { padding: 24px 28px; }
+/* ============ PRODUCT DETAIL MODAL ============ */
+.modal-detail { max-width: 640px; }
 
-.modal-product-preview {
-  height: 160px;
-  border-radius: 12px;
-  border: 2px solid var(--ink);
+.modal-close {
+  position: absolute;
+  top: 14px; right: 14px;
+  z-index: 5;
+  width: 36px; height: 36px;
+  background: var(--paper);
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  font-family: 'Bungee', sans-serif;
+  font-size: 22px;
+  line-height: 1;
   display: grid; place-items: center;
-  margin-bottom: 20px;
-  overflow: hidden;
-  position: relative;
+  box-shadow: 3px 3px 0 var(--ink);
+  transition: transform 0.15s ease, background 0.15s ease;
 }
-.modal-product-preview img { width: 100%; height: 100%; object-fit: cover; }
-.modal-product-preview .emoji { font-size: 80px; filter: drop-shadow(4px 6px 0 rgba(14,14,26,0.25)); }
+.modal-close:hover { background: var(--magenta); color: var(--paper); transform: rotate(90deg); }
+
+.modal-gallery {
+  position: relative;
+  border-bottom: 3px solid var(--ink);
+  padding: 22px 22px 16px;
+}
+.gallery-main {
+  height: 280px;
+  border: 2.5px solid var(--ink);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.45);
+  display: grid; place-items: center;
+  overflow: hidden;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+.gallery-main img { width: 100%; height: 100%; object-fit: cover; }
+.gallery-main .emoji {
+  font-size: 120px;
+  filter: drop-shadow(5px 7px 0 rgba(14,14,26,0.25));
+}
+.gallery-thumbs {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.gallery-thumb {
+  width: 56px; height: 56px;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  overflow: hidden;
+  padding: 0;
+  background: var(--paper);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.gallery-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.gallery-thumb:hover { transform: translate(-1px,-1px); box-shadow: 2px 2px 0 var(--ink); }
+.gallery-thumb.active { border-color: var(--blue); box-shadow: 2px 2px 0 var(--blue); }
+
+.modal-detail-body { padding: 22px 28px 12px; }
+.modal-detail-cat {
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.modal-detail-name {
+  font-family: 'Bungee', sans-serif;
+  font-size: 28px;
+  line-height: 1.05;
+  margin-bottom: 8px;
+}
+.modal-detail-price {
+  font-family: 'Bungee', sans-serif;
+  font-size: 28px;
+  color: var(--blue-deep);
+  margin-bottom: 14px;
+}
+.modal-detail-meta {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-bottom: 16px;
+}
+.meta-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--cream-deep);
+  border: 2px solid var(--ink);
+  border-radius: 99px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.modal-detail-desc {
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1.55;
+  margin-bottom: 18px;
+}
 
 .field { margin-bottom: 18px; }
 .field label {
@@ -590,4 +673,8 @@ footer p { color: var(--ink-soft); margin-bottom: 20px; }
   .search { width: 100%; }
   .marquee-track { font-size: 14px; }
   .how { padding: 56px 18px; }
+  .gallery-main { height: 220px; }
+  .gallery-main .emoji { font-size: 90px; }
+  .modal-detail-name { font-size: 22px; }
+  .modal-detail-price { font-size: 24px; }
 }

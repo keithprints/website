@@ -46,16 +46,18 @@ These are decisions that emerged from a long conversation with the owner. Re-lit
 | `created_at` | `timestamptz` default `now()` | |
 | `name` | `text` not null | "Wolf Keychain" |
 | `slug` | `text` unique not null | URL-friendly |
-| `description` | `text` | Customer-facing blurb |
+| `description` | `text` | Customer-facing short blurb (used on cards) |
+| `details` | `text` | Long-form copy shown in the product detail modal. Falls back to `description` when null. |
 | `category` | `text` | keychains / fidgets / figurines / ornaments / more |
-| `image_url` | `text` | Hosted on Supabase Storage or external |
+| `image_url` | `text` | Primary image — first slot in the gallery. Hosted on Supabase Storage or external |
+| `gallery_urls` | `text[]` | Additional photos shown alongside `image_url` in the detail modal |
 | `colors` | `text[]` | `{Blue, Red, Black, Glow}` |
 | `customizable` | `boolean` default false | Triggers engraving field at checkout |
 | `customization_label` | `text` | "Engrave a name (max 8 chars)" — only used if customizable |
 | `customization_max_chars` | `int` default 8 | |
 | `sale_price_cents` | `int` not null | Stripe wants cents. $8.00 = 800 |
 | `unit_cost_cents` | `int` not null | **PRIVATE.** Filament + electricity per print |
-| `print_time_hours` | `numeric(4,1)` | For Keith's planning |
+| `print_time_hours` | `numeric(4,1)` | Surfaced as a chip in the detail modal ("🖨 ~6h print") and used for Keith's planning |
 | `active` | `boolean` default true | Hidden from site if false |
 | `featured` | `boolean` default false | Show "HOT" or "FAV" badge |
 | `badge` | `text` | "new" / "hot" / "fav" — overrides featured logic if set |
@@ -82,7 +84,7 @@ These are decisions that emerged from a long conversation with the owner. Re-lit
 
 ### Row-level security
 
-- `products` table: anon role can `SELECT` columns `id, name, slug, description, category, image_url, colors, customizable, customization_label, customization_max_chars, sale_price_cents, featured, badge, display_order` WHERE `active = true`. Authenticated role (Keith/Mom) can do everything.
+- `products` table: anon role can `SELECT` columns `id, name, slug, description, details, category, image_url, gallery_urls, colors, customizable, customization_label, customization_max_chars, sale_price_cents, print_time_hours, featured, badge, display_order` WHERE `active = true`. Authenticated role (Keith/Mom) can do everything. (Column visibility is enforced in `src/lib/supabase.js`'s explicit SELECT — RLS is row-level only.)
 - `orders` table: anon role gets nothing. Authenticated role does everything.
 - Service role (used by webhook function only) bypasses RLS.
 

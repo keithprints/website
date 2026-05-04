@@ -15,7 +15,7 @@ export const supabase = createClient(url, anonKey);
 export async function fetchProducts() {
   const { data, error } = await supabase
     .from('products')
-    .select('id, name, slug, description, category, image_url, colors, customizable, customization_label, customization_max_chars, sale_price_cents, featured, badge, display_order')
+    .select('id, name, slug, description, details, category, image_url, gallery_urls, colors, customizable, customization_label, customization_max_chars, sale_price_cents, print_time_hours, featured, badge, display_order')
     .eq('active', true)
     .order('display_order', { ascending: true });
 

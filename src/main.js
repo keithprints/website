@@ -1,6 +1,6 @@
 import { fetchProducts } from './lib/supabase.js';
 import { renderCatalog } from './components/catalog.js';
-import { openBuyModal } from './components/buyModal.js';
+import { openProductModal } from './components/productModal.js';
 
 // ============ APP STATE ============
 const state = {
@@ -163,7 +163,7 @@ function renderMarquee() {
 
 // ============ BUY HANDLER ============
 function handleBuy(product) {
-  openBuyModal(product, async (orderData) => {
+  openProductModal(product, async (orderData) => {
     // orderData = { color, customizationText }
     try {
       showToast('Redirecting to checkout…', '🚀');

@@ -28,11 +28,18 @@ export function renderCatalog(state, onBuy) {
 
   grid.innerHTML = filtered.map(renderProductCard).join('');
 
-  // Wire up Buy buttons
-  grid.querySelectorAll('.buy-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const product = state.products.find(p => p.id === btn.dataset.id);
+  // Whole card opens the product detail modal (mouse + keyboard).
+  grid.querySelectorAll('.product').forEach(card => {
+    const open = () => {
+      const product = state.products.find(p => p.id === card.dataset.id);
       if (product) onBuy(product);
+    };
+    card.addEventListener('click', open);
+    card.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        open();
+      }
     });
   });
 }
