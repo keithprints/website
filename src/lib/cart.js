@@ -48,12 +48,16 @@ function loadState() {
 
 let state = loadState();
 
-function save() {
+function persist() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (err) {
     console.warn('Failed to persist cart', err);
   }
+}
+
+function save() {
+  persist();
   notify();
 }
 
@@ -98,7 +102,10 @@ export function setDeliveryZip(zip) {
   const next = (typeof zip === 'string' ? zip : '').trim();
   if (next === state.deliveryZip) return;
   state.deliveryZip = next;
-  save();
+  // Persist without notifying. The zip input is the authoritative source of
+  // its own value during typing; firing subscribers here would re-render the
+  // drawer footer mid-keystroke and steal focus from the input.
+  persist();
 }
 
 export function addItem({ product, color = null, customizationText = null, quantity = 1 }) {

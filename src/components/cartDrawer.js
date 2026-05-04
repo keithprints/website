@@ -228,8 +228,9 @@ function render() {
     });
   });
 
-  // Wire zip input — validate on every keystroke, save on every keystroke
-  // so it persists across drawer open/close.
+  // Wire zip input — validate on every keystroke and persist silently
+  // (setDeliveryZip doesn't notify, so the drawer doesn't re-render mid-typing
+  // and steal focus). Visual feedback below is updated in place.
   const zipInput = document.getElementById('zipInput');
   if (zipInput) {
     zipInput.addEventListener('input', e => {
@@ -237,6 +238,7 @@ function render() {
       if (value !== e.target.value) e.target.value = value;
       zipDirty = value.length > 0;
       setDeliveryZip(value);
+      updateZipFeedback(value);
     });
   }
 
@@ -244,6 +246,38 @@ function render() {
     if (!checkoutEnabled) return;
     if (onCheckoutCallback) onCheckoutCallback();
   });
+}
+
+// Update the validity hint, row class, and Checkout-button enabled state
+// without re-rendering the input itself (preserves focus while typing).
+function updateZipFeedback(zip) {
+  const row = document.querySelector('.delivery-zip-row');
+  const checkoutBtn = document.getElementById('cartCheckoutBtn');
+  if (!row || !checkoutBtn) return;
+
+  const valid = isLocalDeliveryZip(zip);
+  const dirty = zip.length > 0;
+
+  row.classList.toggle('valid', valid);
+  row.classList.toggle('invalid', !valid && dirty);
+
+  // Replace just the hint line (it's the last child of the row).
+  const oldHint = row.querySelector('.zip-hint');
+  if (oldHint) oldHint.remove();
+
+  if (valid) {
+    const hint = document.createElement('div');
+    hint.className = 'zip-hint zip-hint-ok';
+    hint.textContent = "✓ You're in the local zone";
+    row.appendChild(hint);
+  } else if (dirty) {
+    const hint = document.createElement('div');
+    hint.className = 'zip-hint';
+    hint.textContent = `Local delivery is available for ZIPs: ${localDeliveryZipList().join(', ')}`;
+    row.appendChild(hint);
+  }
+
+  checkoutBtn.disabled = !valid;
 }
 
 function escapeHtml(str) {
