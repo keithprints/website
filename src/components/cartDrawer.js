@@ -5,8 +5,18 @@ import {
   updateQuantity,
   removeItem,
   subscribe,
+  getDeliveryMethod,
+  getDeliveryZip,
+  setDeliveryMethod,
+  setDeliveryZip,
 } from '../lib/cart.js';
 import { formatPrice, categoryGradient } from '../lib/format.js';
+import {
+  isLocalDeliveryZip,
+  localDeliveryZipList,
+  LOCAL_DELIVERY_LABEL,
+  LOCAL_DELIVERY_DESCRIPTION,
+} from '../lib/delivery.js';
 
 const CATEGORY_EMOJI = {
   keychains: '🔑',
@@ -16,7 +26,12 @@ const CATEGORY_EMOJI = {
   more: '🎁',
 };
 
+const STANDARD_SHIPPING_CENTS = 350;
+
 let onCheckoutCallback = null;
+// Track whether the user has interacted with the zip input so we don't
+// show "invalid zip" hints before they've had a chance to type.
+let zipDirty = false;
 
 export function mountCartDrawer({ onCheckout }) {
   onCheckoutCallback = onCheckout;
@@ -131,17 +146,102 @@ function render() {
     });
   });
 
+  // ============ FOOTER (delivery picker + checkout) ============
   const subtotal = getSubtotalCents();
   const itemCount = getItemCount();
+  const deliveryMethod = getDeliveryMethod();
+  const deliveryZip = getDeliveryZip();
+  const isLocal = deliveryMethod === 'local';
+  const zipValid = isLocal ? isLocalDeliveryZip(deliveryZip) : true;
+  const checkoutEnabled = !isLocal || zipValid;
+
+  const shippingCents = isLocal ? 0 : STANDARD_SHIPPING_CENTS;
+  const total = subtotal + shippingCents;
+
   footEl.innerHTML = `
     <div class="cart-subtotal">
       <span>Subtotal (${itemCount} item${itemCount === 1 ? '' : 's'})</span>
       <span class="cart-subtotal-amount">${formatPrice(subtotal)}</span>
     </div>
-    <p class="cart-shipping-note">Shipping calculated at checkout · ships in about a week</p>
-    <button class="btn-primary cart-checkout" id="cartCheckoutBtn">Checkout →</button>
+
+    <div class="cart-delivery">
+      <div class="delivery-label">Delivery</div>
+
+      <label class="delivery-option ${deliveryMethod === 'shipping' ? 'selected' : ''}">
+        <input type="radio" name="delivery" value="shipping" ${deliveryMethod === 'shipping' ? 'checked' : ''} />
+        <span class="delivery-text">
+          <span class="delivery-name">Standard Shipping</span>
+          <span class="delivery-sub">3-5 business days</span>
+        </span>
+        <span class="delivery-price">${formatPrice(STANDARD_SHIPPING_CENTS)}</span>
+      </label>
+
+      <label class="delivery-option ${isLocal ? 'selected' : ''}">
+        <input type="radio" name="delivery" value="local" ${isLocal ? 'checked' : ''} />
+        <span class="delivery-text">
+          <span class="delivery-name">${escapeHtml(LOCAL_DELIVERY_LABEL)}</span>
+          <span class="delivery-sub">${escapeHtml(LOCAL_DELIVERY_DESCRIPTION)}</span>
+        </span>
+        <span class="delivery-price free">FREE</span>
+      </label>
+
+      ${isLocal ? `
+        <div class="delivery-zip-row ${zipValid ? 'valid' : (zipDirty ? 'invalid' : '')}">
+          <label for="zipInput" class="zip-label">ZIP code</label>
+          <input
+            id="zipInput"
+            type="text"
+            inputmode="numeric"
+            maxlength="5"
+            value="${escapeHtml(deliveryZip)}"
+            placeholder="94501"
+            autocomplete="postal-code"
+          />
+          ${!zipValid && zipDirty ? `
+            <div class="zip-hint">
+              Local delivery is available for ZIPs: ${localDeliveryZipList().join(', ')}
+            </div>
+          ` : ''}
+          ${zipValid ? `<div class="zip-hint zip-hint-ok">✓ You're in the local zone</div>` : ''}
+        </div>
+      ` : ''}
+    </div>
+
+    <div class="cart-total-row">
+      <span>Total</span>
+      <span class="cart-total-amount">${formatPrice(total)}</span>
+    </div>
+
+    <button class="btn-primary cart-checkout" id="cartCheckoutBtn" ${checkoutEnabled ? '' : 'disabled'}>
+      Checkout →
+    </button>
   `;
+
+  // Wire delivery radios
+  footEl.querySelectorAll('input[name="delivery"]').forEach(radio => {
+    radio.addEventListener('change', e => {
+      // Reset dirty flag when switching INTO local — fresh chance to type a zip.
+      if (e.target.value === 'local' && deliveryMethod !== 'local') {
+        zipDirty = false;
+      }
+      setDeliveryMethod(e.target.value);
+    });
+  });
+
+  // Wire zip input — validate on every keystroke, save on every keystroke
+  // so it persists across drawer open/close.
+  const zipInput = document.getElementById('zipInput');
+  if (zipInput) {
+    zipInput.addEventListener('input', e => {
+      const value = (e.target.value || '').replace(/\D/g, '').slice(0, 5);
+      if (value !== e.target.value) e.target.value = value;
+      zipDirty = value.length > 0;
+      setDeliveryZip(value);
+    });
+  }
+
   document.getElementById('cartCheckoutBtn').addEventListener('click', () => {
+    if (!checkoutEnabled) return;
     if (onCheckoutCallback) onCheckoutCallback();
   });
 }

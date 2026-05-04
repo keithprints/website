@@ -1,14 +1,20 @@
 // Vercel serverless function — POST /api/checkout
 // Creates a Stripe Checkout session for a multi-item cart.
 //
-// Body: { items: [{ productId, color, customizationText, quantity }, ...] }
+// Body: {
+//   items: [{ productId, color, customizationText, quantity }, ...],
+//   deliveryMethod: 'shipping' | 'local',
+//   deliveryZip: '94501'   // required when deliveryMethod === 'local'
+// }
 // Returns: { url } — Stripe-hosted checkout URL
 //
 // Server re-fetches every product using the service role to lock in
-// price/cost snapshots. Client-supplied prices are ignored.
+// price/cost snapshots. Client-supplied prices are ignored. The local
+// delivery zip is re-validated server-side (don't trust the client).
 
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { isLocalDeliveryZip, localDeliveryZipList } from '../src/lib/delivery.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2024-10-28.acacia',
@@ -22,6 +28,7 @@ const supabase = createClient(
 const MAX_ITEMS = 20;
 const MAX_QTY_PER_LINE = 25;
 const STRIPE_METADATA_VALUE_LIMIT = 500;
+const STANDARD_SHIPPING_CENTS = 350;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -29,7 +36,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { items } = req.body || {};
+    const { items, deliveryMethod, deliveryZip } = req.body || {};
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Cart is empty' });
@@ -45,6 +52,14 @@ export default async function handler(req, res) {
       if (!Number.isInteger(qty) || qty < 1 || qty > MAX_QTY_PER_LINE) {
         return res.status(400).json({ error: `Invalid quantity for ${it.productId}` });
       }
+    }
+
+    // Validate delivery method (default to shipping if missing/unknown).
+    const method = deliveryMethod === 'local' ? 'local' : 'shipping';
+    if (method === 'local' && !isLocalDeliveryZip(deliveryZip)) {
+      return res.status(400).json({
+        error: `Local delivery is only available for ZIPs: ${localDeliveryZipList().join(', ')}.`,
+      });
     }
 
     // One round-trip for every referenced product.
@@ -102,17 +117,50 @@ export default async function handler(req, res) {
     }
 
     // Stripe metadata: max 50 keys, max 500 chars per value.
-    // One key per item ("item_0", "item_1", ...) plus a count.
-    const metadata = { item_count: String(metaItems.length) };
+    // One key per item ("item_0", "item_1", ...) plus a count + delivery info.
+    const metadata = {
+      item_count: String(metaItems.length),
+      delivery_method: method,
+      delivery_zip: method === 'local' ? deliveryZip.trim() : '',
+    };
     for (let i = 0; i < metaItems.length; i++) {
       const json = JSON.stringify(metaItems[i]);
       if (json.length > STRIPE_METADATA_VALUE_LIMIT) {
         return res.status(400).json({
-          error: `Item too complex: ${metaItems[i].n}. Please simplify or contact Keith.`,
+          error: `Item too complex: ${metaItems[i].n}. Please simplify or contact us.`,
         });
       }
       metadata[`item_${i}`] = json;
     }
+
+    // Build shipping options based on the chosen delivery method.
+    const shippingOptions = method === 'local'
+      ? [
+          {
+            shipping_rate_data: {
+              type: 'fixed_amount',
+              fixed_amount: { amount: 0, currency: 'usd' },
+              display_name: 'Free local pickup/delivery',
+              delivery_estimate: {
+                minimum: { unit: 'business_day', value: 1 },
+                maximum: { unit: 'business_day', value: 5 },
+              },
+            },
+          },
+        ]
+      : [
+          {
+            shipping_rate_data: {
+              type: 'fixed_amount',
+              fixed_amount: { amount: STANDARD_SHIPPING_CENTS, currency: 'usd' },
+              display_name: 'Standard shipping (3-5 days)',
+              delivery_estimate: {
+                minimum: { unit: 'business_day', value: 3 },
+                maximum: { unit: 'business_day', value: 7 },
+              },
+            },
+          },
+        ];
 
     const siteUrl = process.env.SITE_URL || `https://${req.headers.host}`;
 
@@ -121,19 +169,7 @@ export default async function handler(req, res) {
       payment_method_types: ['card'],
       line_items: lineItems,
       shipping_address_collection: { allowed_countries: ['US', 'CA'] },
-      shipping_options: [
-        {
-          shipping_rate_data: {
-            type: 'fixed_amount',
-            fixed_amount: { amount: 350, currency: 'usd' },
-            display_name: 'Standard shipping (3-5 days)',
-            delivery_estimate: {
-              minimum: { unit: 'business_day', value: 3 },
-              maximum: { unit: 'business_day', value: 7 },
-            },
-          },
-        },
-      ],
+      shipping_options: shippingOptions,
       metadata,
       success_url: `${siteUrl}/?checkout=success`,
       cancel_url: `${siteUrl}/?checkout=cancelled`,

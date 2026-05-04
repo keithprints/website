@@ -11,6 +11,8 @@ import {
   getItemCount,
   clearCart,
   subscribe as subscribeCart,
+  getDeliveryMethod,
+  getDeliveryZip,
 } from './lib/cart.js';
 
 // ============ APP STATE ============
@@ -224,6 +226,8 @@ async function handleCheckout() {
           customizationText: i.customizationText,
           quantity: i.quantity,
         })),
+        deliveryMethod: getDeliveryMethod(),
+        deliveryZip: getDeliveryZip(),
       }),
     });
     if (!res.ok) {

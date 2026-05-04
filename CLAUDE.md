@@ -38,6 +38,8 @@ These are decisions that emerged from a long conversation with Elliott. Re-litig
 
 6. **No automation Elliott could do manually in 10 seconds.** When an order arrives, Stripe emails him and the webhook writes the order to Supabase. He prints, ships, marks the order `shipped` in Supabase. Don't build label printing, automated tracking emails, or shipping integrations until volume justifies it.
 
+7. **Local delivery zone is zip-list based.** Customers in `94501` or `94502` get a "Free local pickup/delivery" option in the cart that bypasses the $3.50 standard shipping. The eligible-zip list lives in `src/lib/delivery.js` (`isLocalDeliveryZip`) — that single function is the boundary between today's hardcoded list and a future "within 5 miles of 94501" upgrade (replace the lookup with a geocoding API call; callers don't change). The same module is imported by both the cart drawer and `api/checkout.js`, so server and client stay in sync. The server re-validates the zip before sending the free-shipping option to Stripe — never trust the client-supplied flag alone.
+
 ## The data model
 
 ### `products` table
@@ -196,7 +198,8 @@ keithprints/
 │   ├── lib/
 │   │   ├── supabase.js          ← client wrapper
 │   │   ├── format.js            ← currency, category labels/gradients
-│   │   └── cart.js              ← cart state (localStorage, pub/sub)
+│   │   ├── cart.js              ← cart state (localStorage, pub/sub)
+│   │   └── delivery.js          ← local-zone zip eligibility (shared with api/)
 │   └── components/
 │       ├── catalog.js           ← product grid + filters + search
 │       ├── productCard.js

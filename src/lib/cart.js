@@ -1,31 +1,56 @@
 // Cart state — single source of truth, persisted to localStorage.
 // Subscribers (cart drawer, nav badge) get notified on every change.
+//
+// Stored shape:
+//   { items: [...], deliveryMethod: 'shipping' | 'local', deliveryZip: '...' }
+//
+// A previous version stored just the items array directly; loadState handles
+// that legacy shape so anyone with an existing localStorage cart doesn't
+// silently lose it on the next page load.
 
 const STORAGE_KEY = 'kp_cart_v1';
 const subscribers = new Set();
 
-function loadCart() {
+function defaultState() {
+  return { items: [], deliveryMethod: 'shipping', deliveryZip: '' };
+}
+
+function isValidItem(i) {
+  return i && typeof i === 'object' &&
+    typeof i.productId === 'string' &&
+    typeof i.priceCents === 'number' &&
+    typeof i.quantity === 'number' && i.quantity > 0;
+}
+
+function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
+    if (!raw) return defaultState();
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(i =>
-      i && typeof i === 'object' &&
-      typeof i.productId === 'string' &&
-      typeof i.priceCents === 'number' &&
-      typeof i.quantity === 'number' && i.quantity > 0
-    );
+
+    // Legacy: array of items (pre-delivery-method version).
+    if (Array.isArray(parsed)) {
+      return { ...defaultState(), items: parsed.filter(isValidItem) };
+    }
+
+    if (parsed && typeof parsed === 'object') {
+      const items = Array.isArray(parsed.items) ? parsed.items.filter(isValidItem) : [];
+      const deliveryMethod = parsed.deliveryMethod === 'local' ? 'local' : 'shipping';
+      const deliveryZip = typeof parsed.deliveryZip === 'string' ? parsed.deliveryZip : '';
+      return { items, deliveryMethod, deliveryZip };
+    }
+
+    return defaultState();
   } catch {
-    return [];
+    return defaultState();
   }
 }
 
-let cart = loadCart();
+let state = loadState();
 
-function saveCart() {
+function save() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(cart));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (err) {
     console.warn('Failed to persist cart', err);
   }
@@ -43,24 +68,46 @@ function lineKey(productId, color, customizationText) {
 }
 
 export function getCart() {
-  return cart.map(i => ({ ...i }));
+  return state.items.map(i => ({ ...i }));
 }
 
 export function getItemCount() {
-  return cart.reduce((s, i) => s + i.quantity, 0);
+  return state.items.reduce((s, i) => s + i.quantity, 0);
 }
 
 export function getSubtotalCents() {
-  return cart.reduce((s, i) => s + i.priceCents * i.quantity, 0);
+  return state.items.reduce((s, i) => s + i.priceCents * i.quantity, 0);
+}
+
+export function getDeliveryMethod() {
+  return state.deliveryMethod;
+}
+
+export function getDeliveryZip() {
+  return state.deliveryZip;
+}
+
+export function setDeliveryMethod(method) {
+  const next = method === 'local' ? 'local' : 'shipping';
+  if (next === state.deliveryMethod) return;
+  state.deliveryMethod = next;
+  save();
+}
+
+export function setDeliveryZip(zip) {
+  const next = (typeof zip === 'string' ? zip : '').trim();
+  if (next === state.deliveryZip) return;
+  state.deliveryZip = next;
+  save();
 }
 
 export function addItem({ product, color = null, customizationText = null, quantity = 1 }) {
   const key = lineKey(product.id, color, customizationText);
-  const existing = cart.find(i => i.key === key);
+  const existing = state.items.find(i => i.key === key);
   if (existing) {
     existing.quantity += quantity;
   } else {
-    cart.push({
+    state.items.push({
       key,
       productId: product.id,
       productName: product.name,
@@ -72,7 +119,7 @@ export function addItem({ product, color = null, customizationText = null, quant
       quantity,
     });
   }
-  saveCart();
+  save();
 }
 
 export function updateQuantity(key, quantity) {
@@ -80,24 +127,24 @@ export function updateQuantity(key, quantity) {
     removeItem(key);
     return;
   }
-  const item = cart.find(i => i.key === key);
+  const item = state.items.find(i => i.key === key);
   if (item) {
     item.quantity = quantity;
-    saveCart();
+    save();
   }
 }
 
 export function removeItem(key) {
-  const idx = cart.findIndex(i => i.key === key);
+  const idx = state.items.findIndex(i => i.key === key);
   if (idx >= 0) {
-    cart.splice(idx, 1);
-    saveCart();
+    state.items.splice(idx, 1);
+    save();
   }
 }
 
 export function clearCart() {
-  cart = [];
-  saveCart();
+  state = defaultState();
+  save();
 }
 
 export function subscribe(fn) {
