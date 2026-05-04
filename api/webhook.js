@@ -1,10 +1,9 @@
 // Vercel serverless function — POST /api/webhook
 // Receives Stripe webhook events. We care about checkout.session.completed.
-// On that event, write a row to the orders table.
+// On that event, write a parent `orders` row plus N `order_items` rows.
 //
-// This MUST be configured in Stripe Dashboard → Developers → Webhooks
-// pointed at https://yourdomain.com/api/webhook
-// Subscribed events: checkout.session.completed
+// Configure in Stripe Dashboard → Developers → Webhooks pointed at
+// https://yourdomain.com/api/webhook with event checkout.session.completed.
 //
 // IMPORTANT: Vercel must NOT parse the body. We need the raw body for
 // signature verification. The config below disables body parsing.
@@ -25,7 +24,6 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Helper: read the raw body from the incoming request
 async function readRawBody(req) {
   const chunks = [];
   for await (const chunk of req) {
@@ -72,27 +70,71 @@ export default async function handler(req, res) {
         return res.status(200).json({ received: true, duplicate: true });
       }
 
+      // Reconstruct line items from metadata stashed by /api/checkout.
+      const itemCount = parseInt(meta.item_count || '0', 10);
+      const items = [];
+      for (let i = 0; i < itemCount; i++) {
+        const json = meta[`item_${i}`];
+        if (!json) continue;
+        try {
+          items.push(JSON.parse(json));
+        } catch (err) {
+          console.error(`Failed to parse item_${i}:`, err);
+        }
+      }
+
+      const subtotal = items.reduce((s, it) => s + (Number(it.p) || 0) * (Number(it.q) || 0), 0);
+      const shippingCost = session.shipping_cost?.amount_total ?? 0;
+      const total = session.amount_total ?? (subtotal + shippingCost);
+
+      // Stripe occasionally moves the address payload; check both shapes.
+      const shippingAddress =
+        session.shipping_details?.address ||
+        session.collected_information?.shipping_details?.address ||
+        null;
+
       const orderRow = {
         stripe_session_id: session.id,
-        product_id: meta.product_id || null,
-        product_name: meta.product_name || 'Unknown',
-        color: meta.color || null,
-        customization_text: meta.customization_text || null,
-        sale_price_cents: parseInt(meta.sale_price_cents || '0', 10),
-        unit_cost_cents: parseInt(meta.unit_cost_cents || '0', 10),
         customer_email: session.customer_details?.email || null,
         customer_name: session.customer_details?.name || null,
-        shipping_address: session.shipping_details?.address || null,
+        shipping_address: shippingAddress,
+        delivery_method: meta.delivery_method || 'shipping',
+        subtotal_cents: subtotal,
+        shipping_cents: shippingCost,
+        total_cents: total,
         status: 'new',
       };
 
-      const { error: insertError } = await supabase.from('orders').insert(orderRow);
-      if (insertError) {
-        console.error('Failed to insert order:', insertError);
+      const { data: orderInsert, error: orderErr } = await supabase
+        .from('orders')
+        .insert(orderRow)
+        .select('id')
+        .single();
+
+      if (orderErr || !orderInsert) {
+        console.error('Failed to insert order:', orderErr);
         return res.status(500).json({ error: 'Database insert failed' });
       }
 
-      console.log(`Order recorded: ${session.id} — ${orderRow.product_name}`);
+      if (items.length > 0) {
+        const itemRows = items.map(it => ({
+          order_id: orderInsert.id,
+          product_id: it.i || null,
+          product_name: it.n || 'Unknown',
+          color: it.c || null,
+          customization_text: it.x || null,
+          quantity: Number(it.q) || 1,
+          sale_price_cents: Number(it.p) || 0,
+          unit_cost_cents: Number(it.u) || 0,
+        }));
+        const { error: itemsErr } = await supabase.from('order_items').insert(itemRows);
+        if (itemsErr) {
+          console.error('Failed to insert order_items:', itemsErr);
+          return res.status(500).json({ error: 'Database insert failed for items' });
+        }
+      }
+
+      console.log(`Order ${orderInsert.id} recorded — ${items.length} items, total ${total}c`);
     }
 
     return res.status(200).json({ received: true });

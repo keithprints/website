@@ -28,11 +28,11 @@ These are decisions that emerged from a long conversation with the owner. Re-lit
 
 2. **Single product table is fine.** No separate variants table. Colors are a `text[]` array on the product itself. If color-specific pricing or images ever becomes a need, split it then. Today, a customer picks a color from a dropdown and that selection rides along with the order.
 
-3. **No cart.** Each product has a "Buy Now" button that opens Stripe Checkout for that single item plus its color and optional engraving. Multi-item orders happen by checking out twice. At Keith's volume this is fine and removes a whole class of bugs.
+3. **Cart-based checkout.** Customers add items to a slide-out cart (state lives in `localStorage`, no auth needed) and check out once with all of them. State seeded `kp_cart_v1`. *(Originally scoped as "no cart, single-item Buy Now" — reversed 2026-05-04 after observing the friction of forcing customers through Stripe Checkout once per item.)*
 
 4. **Profit/cost data lives in the same products table but is gated by RLS.** The `unit_cost` field is private. Public site never sees it. Keith and his mom see it via Supabase auth.
 
-5. **Order history is the financial source of truth.** Every Stripe webhook writes a row to the `orders` table, snapshotting the price and unit cost AT THE TIME OF SALE. Don't reference live product fields for historical analysis — prices change, snapshots don't.
+5. **Order history is the financial source of truth.** Every Stripe webhook writes one parent `orders` row plus one `order_items` row per cart line, snapshotting price and unit cost AT THE TIME OF SALE. Don't reference live product fields for historical analysis — prices change, snapshots don't.
 
 6. **No automation Keith could do manually in 10 seconds.** When an order arrives, Stripe emails him. He prints, ships, marks the order `shipped` in Supabase. Don't build label printing, automated tracking emails, or shipping integrations until volume justifies it.
 
@@ -63,29 +63,43 @@ These are decisions that emerged from a long conversation with the owner. Re-lit
 | `badge` | `text` | "new" / "hot" / "fav" — overrides featured logic if set |
 | `display_order` | `int` default 0 | Manual ordering within category |
 
-### `orders` table
+### `orders` table (parent — one row per cart checkout)
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | `uuid` PK, default `gen_random_uuid()` | |
 | `created_at` | `timestamptz` default `now()` | |
 | `stripe_session_id` | `text` unique not null | Idempotency key for webhooks |
-| `product_id` | `uuid` FK → products(id) | |
-| `product_name` | `text` not null | Snapshot |
-| `color` | `text` | What customer picked |
-| `customization_text` | `text` | Engraving if any |
-| `sale_price_cents` | `int` not null | Snapshot of price at sale time |
-| `unit_cost_cents` | `int` not null | Snapshot of cost at sale time |
 | `customer_email` | `text` | From Stripe |
 | `customer_name` | `text` | From Stripe |
 | `shipping_address` | `jsonb` | Full address from Stripe |
+| `delivery_method` | `text` default `'shipping'` | `shipping` / `local`. Used by future local-delivery zip gating |
+| `subtotal_cents` | `int` | Sum of (sale_price × qty) across order_items |
+| `shipping_cents` | `int` default 0 | Stripe-computed shipping charge |
+| `total_cents` | `int` | Stripe `amount_total` |
 | `status` | `text` default 'new' | new / printing / shipped / cancelled |
 | `notes` | `text` | Keith's free-form notes |
+| ~~`product_id`, `product_name`, `color`, `customization_text`, `sale_price_cents`, `unit_cost_cents`~~ | (legacy) | Pre-cart single-item columns. NULL on cart-shaped rows; data lives in `order_items` instead. Kept for backwards-compatibility with any pre-cart test rows; not used by views. |
+
+### `order_items` table (child — one row per cart line)
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `uuid` PK, default `gen_random_uuid()` | |
+| `order_id` | `uuid` FK → orders(id) on delete cascade | |
+| `product_id` | `uuid` FK → products(id) on delete set null | |
+| `product_name` | `text` not null | Snapshot |
+| `color` | `text` | What customer picked |
+| `customization_text` | `text` | Engraving if any |
+| `quantity` | `int` not null default 1, > 0 | |
+| `sale_price_cents` | `int` not null | Per-unit snapshot at sale time |
+| `unit_cost_cents` | `int` not null | Per-unit snapshot at sale time |
+| `created_at` | `timestamptz` default `now()` | |
 
 ### Row-level security
 
 - `products` table: anon role can `SELECT` columns `id, name, slug, description, details, category, image_url, gallery_urls, colors, customizable, customization_label, customization_max_chars, sale_price_cents, print_time_hours, featured, badge, display_order` WHERE `active = true`. Authenticated role (Keith/Mom) can do everything. (Column visibility is enforced in `src/lib/supabase.js`'s explicit SELECT — RLS is row-level only.)
-- `orders` table: anon role gets nothing. Authenticated role does everything.
+- `orders` and `order_items` tables: anon role gets nothing. Authenticated role does everything.
 - Service role (used by webhook function only) bypasses RLS.
 
 The public website uses the `anon` key. The webhook function uses the `service_role` key (set as a Vercel env var, never exposed to the browser).
@@ -102,15 +116,17 @@ These show up in Supabase's Table Editor as read-only views Keith can browse.
 
 **For a customer:**
 1. Lands on keithprints.com, sees the banner and catalog
-2. Clicks a product, picks a color (and types engraving if applicable)
-3. Hits "Buy Now," redirects to Stripe Checkout
-4. Pays, gets redirected to a thank-you page
-5. Receives Stripe's automatic order confirmation email
+2. Clicks a product card → detail modal opens with gallery + description
+3. Picks a color (and types engraving if applicable), clicks **Add to Cart**
+4. Adds more items if they want, then clicks the cart icon (top right) → drawer slides in
+5. Reviews cart, hits **Checkout**, redirects to Stripe Checkout
+6. Pays, gets redirected to a thank-you page (cart is cleared on success)
+7. Receives Stripe's automatic order confirmation email
 
 **For Keith:**
-1. Stripe sends an email: "New order: Wolf Keychain, blue, engraved 'OLIVIA'"
-2. Opens Supabase on his phone, sees the order in the orders table, status = "new"
-3. Prints it, ships it, updates status = "shipped"
+1. Stripe sends an email summarizing the order
+2. Opens Supabase on his phone — `orders` row plus matching `order_items` rows, status = "new"
+3. Prints each item, ships, updates the parent order's status = "shipped"
 4. End of week: opens the `bestsellers` view to see what's selling
 
 **For owner (Elliott) and Keith's mom:**
@@ -151,7 +167,6 @@ These are external services Claude Code cannot configure. Do these in order:
 
 ## Things to actively avoid
 
-- **Don't add a cart.** Owner explicitly de-scoped this. One-item-per-checkout is correct for now.
 - **Don't add inventory tracking.** Print-to-order means there's no inventory to track.
 - **Don't add user accounts for customers.** Stripe handles email collection; that's enough.
 - **Don't add an admin UI.** Supabase's Table Editor IS the admin UI. Building one in-app is wasted effort.
@@ -174,23 +189,26 @@ keithprints/
 │   ├── banner.jpg               ← THE hero banner, do not replace lightly
 │   └── favicon.ico
 ├── src/
-│   ├── main.js                  ← entry point, kicks off the app
+│   ├── main.js                  ← entry point, renders shell + wires cart
 │   ├── style.css                ← all styles (no Tailwind, no CSS-in-JS)
 │   ├── lib/
 │   │   ├── supabase.js          ← client wrapper
-│   │   └── format.js            ← currency, slug helpers
+│   │   ├── format.js            ← currency, category labels/gradients
+│   │   └── cart.js              ← cart state (localStorage, pub/sub)
 │   └── components/
 │       ├── catalog.js           ← product grid + filters + search
 │       ├── productCard.js
-│       ├── buyModal.js          ← color + engraving picker before checkout
-│       └── nav.js
+│       ├── productModal.js      ← detail view: gallery, color, customization, Add-to-Cart
+│       └── cartDrawer.js        ← slide-out cart with line items + Checkout button
 ├── api/
-│   ├── checkout.js              ← creates Stripe Checkout session
-│   └── webhook.js               ← handles Stripe webhook, writes order
+│   ├── checkout.js              ← creates Stripe session for full cart
+│   └── webhook.js               ← writes parent order + N order_items rows
 ├── supabase/
 │   ├── migrations/
-│   │   └── 001_init.sql         ← creates tables, RLS, views
-│   └── seed.sql                 ← demo products to start with
+│   │   ├── 001_init.sql                ← creates tables, RLS, views
+│   │   ├── 002_product_details.sql     ← gallery_urls + details columns
+│   │   └── 003_multi_item_orders.sql   ← order_items child table + view rewrites
+│   └── seed.sql                ← demo products to start with
 ├── docs/
 │   ├── SETUP.md                 ← step-by-step external services guide
 │   ├── ADDING_PRODUCTS.md       ← how Keith/Mom add products via Supabase

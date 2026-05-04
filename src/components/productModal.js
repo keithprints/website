@@ -100,7 +100,7 @@ export function openProductModal(product, onConfirm) {
 
         <div class="modal-foot">
           <button class="btn-secondary" id="cancelBtn">Close</button>
-          <button class="btn-primary" id="confirmBtn">Buy Now →</button>
+          <button class="btn-primary" id="confirmBtn">Add to Cart →</button>
         </div>
       </div>
     </div>

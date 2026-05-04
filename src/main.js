@@ -1,6 +1,17 @@
 import { fetchProducts } from './lib/supabase.js';
 import { renderCatalog } from './components/catalog.js';
 import { openProductModal } from './components/productModal.js';
+import {
+  mountCartDrawer,
+  openCartDrawer,
+} from './components/cartDrawer.js';
+import {
+  addItem,
+  getCart,
+  getItemCount,
+  clearCart,
+  subscribe as subscribeCart,
+} from './lib/cart.js';
 
 // ============ APP STATE ============
 const state = {
@@ -31,6 +42,14 @@ function renderShell() {
           <li><a href="#about">About Keith</a></li>
           <li><a href="#contact">Contact</a></li>
         </ul>
+        <button class="cart-btn" id="cartBtn" aria-label="Open cart">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <path d="M16 10a4 4 0 0 1-8 0"/>
+          </svg>
+          <span class="cart-count" id="cartCount" data-empty="true">0</span>
+        </button>
       </div>
     </nav>
 
@@ -95,7 +114,7 @@ function renderShell() {
           <div class="step">
             <span class="step-num">01</span>
             <h3>Pick Your Print</h3>
-            <p>Browse the shop. Pick a color. Click "Buy Now" and check out securely with Stripe.</p>
+            <p>Browse the shop. Pick a color. Add it to your cart and check out securely with Stripe.</p>
           </div>
           <div class="step">
             <span class="step-num">02</span>
@@ -137,14 +156,26 @@ function renderShell() {
       document.querySelectorAll('.pill').forEach(x => x.classList.remove('active'));
       p.classList.add('active');
       state.activeCategory = p.dataset.cat;
-      renderCatalog(state, handleBuy);
+      renderCatalog(state, handleProductOpen);
     });
   });
 
   // Wire up search
   document.getElementById('searchInput').addEventListener('input', e => {
     state.searchQuery = e.target.value.toLowerCase().trim();
-    renderCatalog(state, handleBuy);
+    renderCatalog(state, handleProductOpen);
+  });
+
+  // Cart icon → open drawer
+  document.getElementById('cartBtn').addEventListener('click', openCartDrawer);
+
+  // Keep the cart-count badge in sync with cart state.
+  subscribeCart(() => {
+    const el = document.getElementById('cartCount');
+    if (!el) return;
+    const count = getItemCount();
+    el.textContent = String(count);
+    el.dataset.empty = count === 0 ? 'true' : 'false';
   });
 }
 
@@ -161,32 +192,50 @@ function renderMarquee() {
   document.getElementById('marqueeTrack').innerHTML = single + single;
 }
 
-// ============ BUY HANDLER ============
-function handleBuy(product) {
-  openProductModal(product, async (orderData) => {
-    // orderData = { color, customizationText }
-    try {
-      showToast('Redirecting to checkout…', '🚀');
-      const res = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          productId: product.id,
-          color: orderData.color,
-          customizationText: orderData.customizationText,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Checkout failed');
-      }
-      const { url } = await res.json();
-      window.location.href = url;
-    } catch (err) {
-      console.error(err);
-      showToast(`Couldn't start checkout: ${err.message}`, '⚠️');
-    }
+// ============ PRODUCT INTERACTION ============
+// Card click → product detail modal → "Add to Cart" puts the item in
+// the cart with the picked color/customization. The cart drawer is the
+// single path to checkout.
+function handleProductOpen(product) {
+  openProductModal(product, (selection) => {
+    addItem({
+      product,
+      color: selection.color,
+      customizationText: selection.customizationText,
+      quantity: 1,
+    });
+    showToast('Added to cart', '✓');
   });
+}
+
+// ============ CHECKOUT ============
+async function handleCheckout() {
+  const cart = getCart();
+  if (cart.length === 0) return;
+  try {
+    showToast('Redirecting to checkout…', '🚀');
+    const res = await fetch('/api/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items: cart.map(i => ({
+          productId: i.productId,
+          color: i.color,
+          customizationText: i.customizationText,
+          quantity: i.quantity,
+        })),
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Checkout failed');
+    }
+    const { url } = await res.json();
+    window.location.href = url;
+  } catch (err) {
+    console.error(err);
+    showToast(`Couldn't start checkout: ${err.message}`, '⚠️');
+  }
 }
 
 // ============ TOAST ============
@@ -211,10 +260,10 @@ export function showToast(msg, emoji = '✨') {
 function checkThankYou() {
   const params = new URLSearchParams(window.location.search);
   if (params.get('checkout') === 'success') {
+    clearCart();
     setTimeout(() => {
       showToast(`Order placed! Keith is firing up the printer 🎉`, '✓');
     }, 500);
-    // Clean the URL
     window.history.replaceState({}, '', window.location.pathname);
   } else if (params.get('checkout') === 'cancelled') {
     setTimeout(() => {
@@ -227,9 +276,10 @@ function checkThankYou() {
 // ============ INIT ============
 async function init() {
   renderShell();
+  mountCartDrawer({ onCheckout: handleCheckout });
   state.products = await fetchProducts();
   state.loading = false;
-  renderCatalog(state, handleBuy);
+  renderCatalog(state, handleProductOpen);
   checkThankYou();
 }
 
