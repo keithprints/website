@@ -2,7 +2,9 @@
 
 ## What this is
 
-Keith Prints is a small e-commerce website for a 12-year-old's 3D printing business. He prints keychains, fidgets, figurines, and ornaments and sells them at a bi-annual local market. This site exists to capture sales between markets — typically a few orders per month at peak, sometimes zero. It is **not** a high-volume shop and should not be over-engineered for scale.
+Keith Prints is a small e-commerce website for a hobby 3D-printing shop. The shop sells keychains, fidgets, figurines, and ornaments — printed to order on a single 3D printer named **Keith**. The site exists to capture sales between bi-annual local markets — typically a few orders per month at peak, sometimes zero. It is **not** a high-volume shop and should not be over-engineered for scale.
+
+**About the name.** "Keith" is the printer, not a person. The site uses a printer-as-mascot voice for customer-facing copy (`"I'm Keith and I make stuff that's actually cool"`, `"kid-run, kid-approved"`, etc.) — that's intentional brand voice and should be preserved. Operationally, **Elliott is the sole owner/operator**: he runs the printer, fulfills orders, manages the catalog, and handles all admin. There is no separate "Keith" or "Mom" stakeholder.
 
 The brand voice is "kid-run, kid-honest, late elementary/middle school." Chunky display type, neon accents on a warm cream background, sticker-pop drop shadows. The hero banner is a hero asset — keep it prominent. Voice is direct and a little cheeky, never babyish ("Cool things. 3D printed. Just for you.").
 
@@ -13,28 +15,28 @@ The brand voice is "kid-run, kid-honest, late elementary/middle school." Chunky 
 | Frontend | Vite + vanilla JS (no React) hosted on Vercel | Yes |
 | Database | Supabase (Postgres) | Yes — 500MB DB, plenty for this |
 | Payments | Stripe Checkout (hosted) via Vercel serverless function | Pay-per-transaction only |
-| Email | Stripe sends order emails to Keith automatically | N/A |
-| DNS | Owner provides own domain (~$12/yr) | N/A |
+| Email | Stripe sends order emails automatically; rich fulfillment email TBD via Resend | N/A |
+| DNS | Owner-provided domain (~$12/yr) | N/A |
 
-**Why no React:** the demo site is ~250 lines of vanilla JS with no build step requirements. Adding React/Next would multiply the surface area for a site with maybe 50 product cards and one checkout button. Vite + plain JS keeps the deploy fast, the code grokkable, and lets Keith eventually understand his own site.
+**Why no React:** the site is a few hundred lines of vanilla JS for a catalog with maybe 50 product cards and one checkout button. Adding React/Next would multiply the surface area for no real gain. Vite + plain JS keeps the deploy fast and the code grokkable.
 
-**Why Supabase over Airtable:** Owner explicitly chose Supabase. Real Postgres, free tier covers needs, has built-in admin UI (Table Editor) that's nearly as easy as Airtable for non-technical editors. Bonus: row-level security means we can expose public product data via the anon key without leaking cost/profit fields.
+**Why Supabase over Airtable:** Owner explicitly chose Supabase. Real Postgres, free tier covers needs, has built-in admin UI (Table Editor) that's nearly as easy as Airtable for non-technical editing. Bonus: row-level security means we can expose public product data via the anon key without leaking cost/profit fields.
 
 ## Critical scoping decisions (don't undo these)
 
-These are decisions that emerged from a long conversation with the owner. Re-litigating them wastes time:
+These are decisions that emerged from a long conversation with Elliott. Re-litigating them wastes time:
 
-1. **Print-to-order. No inventory tracking.** Every sale assumes Keith will print after the order arrives. No stock counts, no "sold out" states, no decrements, no race conditions to worry about. The website tells customers "ships within a week" because that's how long printing takes.
+1. **Print-to-order. No inventory tracking.** Every sale assumes the order will be printed after it arrives. No stock counts, no "sold out" states, no decrements, no race conditions to worry about. The website tells customers "ships within a week" because that's how long printing takes.
 
 2. **Single product table is fine.** No separate variants table. Colors are a `text[]` array on the product itself. If color-specific pricing or images ever becomes a need, split it then. Today, a customer picks a color from a dropdown and that selection rides along with the order.
 
-3. **Cart-based checkout.** Customers add items to a slide-out cart (state lives in `localStorage`, no auth needed) and check out once with all of them. State seeded `kp_cart_v1`. *(Originally scoped as "no cart, single-item Buy Now" — reversed 2026-05-04 after observing the friction of forcing customers through Stripe Checkout once per item.)*
+3. **Cart-based checkout.** Customers add items to a slide-out cart (state lives in `localStorage`, no auth needed) and check out once with all of them. Storage key `kp_cart_v1`. *(Originally scoped as "no cart, single-item Buy Now" — reversed 2026-05-04 after observing the friction of forcing customers through Stripe Checkout once per item.)*
 
-4. **Profit/cost data lives in the same products table but is gated by RLS.** The `unit_cost` field is private. Public site never sees it. Keith and his mom see it via Supabase auth.
+4. **Profit/cost data lives in the same products table but is gated by RLS.** The `unit_cost_cents` field is private. Public site never sees it. Elliott sees it via Supabase auth.
 
 5. **Order history is the financial source of truth.** Every Stripe webhook writes one parent `orders` row plus one `order_items` row per cart line, snapshotting price and unit cost AT THE TIME OF SALE. Don't reference live product fields for historical analysis — prices change, snapshots don't.
 
-6. **No automation Keith could do manually in 10 seconds.** When an order arrives, Stripe emails him. He prints, ships, marks the order `shipped` in Supabase. Don't build label printing, automated tracking emails, or shipping integrations until volume justifies it.
+6. **No automation Elliott could do manually in 10 seconds.** When an order arrives, Stripe emails him and the webhook writes the order to Supabase. He prints, ships, marks the order `shipped` in Supabase. Don't build label printing, automated tracking emails, or shipping integrations until volume justifies it.
 
 ## The data model
 
@@ -57,7 +59,7 @@ These are decisions that emerged from a long conversation with the owner. Re-lit
 | `customization_max_chars` | `int` default 8 | |
 | `sale_price_cents` | `int` not null | Stripe wants cents. $8.00 = 800 |
 | `unit_cost_cents` | `int` not null | **PRIVATE.** Filament + electricity per print |
-| `print_time_hours` | `numeric(4,1)` | Surfaced as a chip in the detail modal ("🖨 ~6h print") and used for Keith's planning |
+| `print_time_hours` | `numeric(4,1)` | Surfaced as a chip in the detail modal ("🖨 ~6h print") and used for print scheduling |
 | `active` | `boolean` default true | Hidden from site if false |
 | `featured` | `boolean` default false | Show "HOT" or "FAV" badge |
 | `badge` | `text` | "new" / "hot" / "fav" — overrides featured logic if set |
@@ -73,12 +75,12 @@ These are decisions that emerged from a long conversation with the owner. Re-lit
 | `customer_email` | `text` | From Stripe |
 | `customer_name` | `text` | From Stripe |
 | `shipping_address` | `jsonb` | Full address from Stripe |
-| `delivery_method` | `text` default `'shipping'` | `shipping` / `local`. Used by future local-delivery zip gating |
+| `delivery_method` | `text` default `'shipping'` | `shipping` / `local`. Used by local-delivery zip gating |
 | `subtotal_cents` | `int` | Sum of (sale_price × qty) across order_items |
 | `shipping_cents` | `int` default 0 | Stripe-computed shipping charge |
 | `total_cents` | `int` | Stripe `amount_total` |
 | `status` | `text` default 'new' | new / printing / shipped / cancelled |
-| `notes` | `text` | Keith's free-form notes |
+| `notes` | `text` | Free-form fulfillment notes |
 | ~~`product_id`, `product_name`, `color`, `customization_text`, `sale_price_cents`, `unit_cost_cents`~~ | (legacy) | Pre-cart single-item columns. NULL on cart-shaped rows; data lives in `order_items` instead. Kept for backwards-compatibility with any pre-cart test rows; not used by views. |
 
 ### `order_items` table (child — one row per cart line)
@@ -98,7 +100,7 @@ These are decisions that emerged from a long conversation with the owner. Re-lit
 
 ### Row-level security
 
-- `products` table: anon role can `SELECT` columns `id, name, slug, description, details, category, image_url, gallery_urls, colors, customizable, customization_label, customization_max_chars, sale_price_cents, print_time_hours, featured, badge, display_order` WHERE `active = true`. Authenticated role (Keith/Mom) can do everything. (Column visibility is enforced in `src/lib/supabase.js`'s explicit SELECT — RLS is row-level only.)
+- `products` table: anon role can `SELECT` columns `id, name, slug, description, details, category, image_url, gallery_urls, colors, customizable, customization_label, customization_max_chars, sale_price_cents, print_time_hours, featured, badge, display_order` WHERE `active = true`. Authenticated role (Elliott) can do everything. (Column visibility is enforced in `src/lib/supabase.js`'s explicit SELECT — RLS is row-level only.)
 - `orders` and `order_items` tables: anon role gets nothing. Authenticated role does everything.
 - Service role (used by webhook function only) bypasses RLS.
 
@@ -110,7 +112,7 @@ The public website uses the `anon` key. The webhook function uses the `service_r
 - `monthly_summary` — revenue, cost, profit, margin grouped by month.
 - `unsold_products` — active products with zero orders.
 
-These show up in Supabase's Table Editor as read-only views Keith can browse.
+These show up in Supabase's Table Editor as read-only views Elliott can browse.
 
 ## How this is supposed to feel to use
 
@@ -123,16 +125,12 @@ These show up in Supabase's Table Editor as read-only views Keith can browse.
 6. Pays, gets redirected to a thank-you page (cart is cleared on success)
 7. Receives Stripe's automatic order confirmation email
 
-**For Keith:**
-1. Stripe sends an email summarizing the order
-2. Opens Supabase on his phone — `orders` row plus matching `order_items` rows, status = "new"
-3. Prints each item, ships, updates the parent order's status = "shipped"
-4. End of week: opens the `bestsellers` view to see what's selling
-
-**For owner (Elliott) and Keith's mom:**
-1. Add new products via Supabase Table Editor (form view, not raw SQL)
-2. Edit prices/descriptions/active flags the same way
-3. Check the `monthly_summary` view for financial overview
+**For Elliott (operator):**
+1. Stripe emails a payment notification, and the webhook auto-writes one `orders` row + N `order_items` rows to Supabase
+2. Opens Supabase on phone — finds the new order at status `new`
+3. Prints each item on the printer (Keith), packages, ships, updates the parent order's status to `shipped`
+4. End of week: opens the `bestsellers` and `monthly_summary` views to see what's selling and how the margin is trending
+5. Adds new products via Supabase Table Editor (form view, not raw SQL); edits prices/descriptions/active flags the same way
 
 ## Setup steps not in the codebase
 
@@ -143,15 +141,18 @@ These are external services Claude Code cannot configure. Do these in order:
 - Save the project URL and anon key into `.env.local` (template provided)
 - Save the service role key into Vercel env vars later
 - Run `supabase/migrations/001_init.sql` in the SQL editor (or via CLI)
+- Run `supabase/migrations/002_product_details.sql`
+- Run `supabase/migrations/003_multi_item_orders.sql`
 - Run `supabase/seed.sql` to load the demo products
-- In Authentication → Settings, enable email auth so Keith and Mom can log in to edit
+- In Authentication → Settings, enable email auth so Elliott can log in to edit products
 
 ### 2. Stripe account (10 min)
-- Create account at stripe.com (free, must be 18+ — use parent's name)
+- Create account at stripe.com (free)
 - Get the publishable key (`pk_test_...`) and secret key (`sk_test_...`)
 - Set up webhook endpoint pointing to `https://yourdomain.com/api/webhook` with event `checkout.session.completed`
 - Save the webhook signing secret (`whsec_...`)
-- Stay in test mode until everything is wired up; switch to live keys before launch
+- Stay in test mode (or a Sandbox) until everything is wired up; switch to live keys before launch
+- **Each Stripe mode (live / test / each named Sandbox) has its own webhook endpoint and signing secret.** When switching modes, you must create a new webhook in the new mode and update `STRIPE_WEBHOOK_SECRET` in Vercel.
 
 ### 3. Vercel deployment (5 min)
 - Connect the GitHub repo to Vercel
@@ -160,19 +161,20 @@ These are external services Claude Code cannot configure. Do these in order:
 - Add custom domain if applicable
 
 ### 4. First test
-- Visit the site, click Buy Now on any product
+- Visit the site, add a product to cart, hit Checkout
 - Use Stripe test card `4242 4242 4242 4242` with any future expiry, any CVC
-- Confirm webhook fires, order appears in Supabase
-- Confirm Stripe receipt email arrives
+- Confirm webhook fires, order appears in Supabase (`orders` + `order_items`)
+- Confirm Stripe receipt email arrives (note: Sandboxes often suppress real emails — only reliable in live mode)
 
 ## Things to actively avoid
 
 - **Don't add inventory tracking.** Print-to-order means there's no inventory to track.
 - **Don't add user accounts for customers.** Stripe handles email collection; that's enough.
 - **Don't add an admin UI.** Supabase's Table Editor IS the admin UI. Building one in-app is wasted effort.
-- **Don't add abandoned cart recovery, loyalty programs, or marketing automations.** This is a kid's hobby business with bi-annual market peaks. The complexity isn't earned.
+- **Don't add abandoned cart recovery, loyalty programs, or marketing automations.** This is a low-volume hobby shop with bi-annual market peaks. The complexity isn't earned.
 - **Don't move to Next.js without a reason.** Vite + vanilla works. Migration would be premature.
-- **Don't refactor the design system.** The aesthetic was developed in collaboration with the owner and is intentional. Don't replace Bungee/Bowlby with Inter, don't replace cream with white, don't soften the chunky borders.
+- **Don't refactor the design system.** The aesthetic was developed with the owner and is intentional. Don't replace Bungee/Bowlby with Inter, don't replace cream with white, don't soften the chunky borders.
+- **Don't drop the printer-as-mascot brand voice.** Customer-facing copy intentionally treats Keith (the printer) as a character ("I'm Keith and I make stuff"). That's a deliberate marketing choice, not a quirk to "fix."
 
 ## File map
 
@@ -211,17 +213,18 @@ keithprints/
 │   └── seed.sql                ← demo products to start with
 ├── docs/
 │   ├── SETUP.md                 ← step-by-step external services guide
-│   ├── ADDING_PRODUCTS.md       ← how Keith/Mom add products via Supabase
+│   ├── ADDING_PRODUCTS.md       ← how to add products via Supabase Table Editor
 │   └── ARCHITECTURE.md          ← deeper-dive for future maintainers
 └── index.html
 ```
 
 ## When in doubt
 
-The owner is Elliott. Keith is 12. Decisions should optimize for:
-1. Keith being able to understand and eventually maintain parts of this himself
-2. Mom being able to add a product without writing code
+Elliott is the sole operator. Keith is the 3D printer (named, not a person — used as brand persona for customer-facing copy). Decisions should optimize for:
+
+1. Elliott (or any future maintainer) being able to understand and edit the code easily
+2. Adding a product never requiring code (Supabase Table Editor only)
 3. The site never breaking silently — fail loudly, log clearly
 4. Total monthly cost staying under $5 unless real revenue justifies more
 
-If considering a change that increases complexity, ask: "Does this serve a kid running a hobby print shop with ~10 sales/month?" If no, don't build it.
+If considering a change that increases complexity, ask: "Does this serve a low-volume hobby shop with ~10 sales/month?" If no, don't build it.
