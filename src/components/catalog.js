@@ -24,7 +24,7 @@ export function renderCatalog(state, onBuy) {
     return;
   }
 
-  countEl.textContent = `${state.products.length} cool things and counting — picked, printed, and packed by Keith`;
+  countEl.textContent = '';
 
   grid.innerHTML = filtered.map(renderProductCard).join('');
 
