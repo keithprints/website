@@ -43,7 +43,7 @@ function renderShell() {
         <ul class="nav-links">
           <li><a href="#shop">Shop</a></li>
           <li><a href="#how">How It Works</a></li>
-          <li><a href="#about">About Keith</a></li>
+          <li><a href="#about">About Keith Prints</a></li>
           <li><a href="#contact">Contact</a></li>
         </ul>
         <button class="cart-btn" id="cartBtn" aria-label="Open cart">
@@ -142,7 +142,7 @@ function renderShell() {
           <a href="#shop">Shop</a>
           <a href="#how">How It Works</a>
           <a href="#about">About</a>
-          <a href="mailto:hi@keithprints.example">Email Keith</a>
+          <a href="mailto:keithprints3d@gmail.com">Email Keith Prints</a>
         </div>
         <div class="foot-bottom">
           Made with <span class="heart">♥</span> by Keith — © 2026 Keith Prints
