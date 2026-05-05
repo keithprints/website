@@ -136,8 +136,7 @@ function renderShell() {
 
     <footer id="contact">
       <div class="foot-inner">
-        <h4>Keith<span style="color:var(--blue)">Prints</span></h4>
-        <p>Cool things, 3D printed in Alameda, California, just for you.</p>
+        <img class="foot-logo" src="/logo.png" alt="Keith Prints" />
         <div class="foot-links">
           <a href="#shop">Shop</a>
           <a href="#how">How It Works</a>

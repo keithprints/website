@@ -1083,8 +1083,13 @@ footer {
   text-align: center;
 }
 .foot-inner { max-width: 1100px; margin: 0 auto; }
-footer h4 { font-family: 'Bowlby One', sans-serif; font-size: 32px; margin-bottom: 14px; }
-footer p { color: var(--ink-soft); margin-bottom: 20px; }
+.foot-logo {
+  display: block;
+  width: 280px;
+  max-width: 80%;
+  height: auto;
+  margin: 0 auto 22px;
+}
 .foot-links { display: flex; gap: 16px; justify-content: center; margin-bottom: 24px; flex-wrap: wrap; }
 .foot-links a { font-weight: 600; font-size: 14px; padding: 6px 12px; border-radius: 99px; }
 .foot-links a:hover { background: var(--ink); color: var(--paper); }
