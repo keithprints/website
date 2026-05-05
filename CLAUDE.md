@@ -241,3 +241,7 @@ Elliott is the sole operator. Keith is the 3D printer (named, not a person — u
 4. Total monthly cost staying under $5 unless real revenue justifies more
 
 If considering a change that increases complexity, ask: "Does this serve a low-volume hobby shop with ~10 sales/month?" If no, don't build it.
+
+## Queued work
+
+Items scoped but not yet built live in [`docs/PUNCHLIST.md`](docs/PUNCHLIST.md). Read it before adding new items there or before picking one up to build.
