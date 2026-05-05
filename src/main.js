@@ -72,9 +72,9 @@ function renderShell() {
 
     <section class="intro" id="about">
       <div class="intro-card">
-        <h3>I'm Keith, and I make stuff that's actually cool.</h3>
-        <p>I'm 12. I have two 3D printers in my garage and I print every single order myself. No factories, no boring corporate stuff.</p>
-        <p>Pick something, I'll print it for you, and it'll show up at your door in about a week. Easy.</p>
+        <h3>Cool things. 3D printed. Just for you.</h3>
+        <p>Keith Prints is a small 3D printing shop in Alameda, California. No factories, no boring corporate stuff. Every keychain, fidget, figurine, and ornament on this site is printed on a single 3D printer — named Keith, because of course it has a name.</p>
+        <p>Pick something, we'll print it for you, and it shows up at your door in about a week. Easy.</p>
       </div>
       <div class="intro-headline">
         <h2>Print stuff. <em>Trade stuff.</em><br><span class="hl">Show off</span> at school.</h2>
@@ -188,7 +188,7 @@ function renderMarquee() {
     '⚡ MADE TO ORDER',
     '🎨 PICK YOUR COLOR',
     '📦 SHIPS IN A WEEK',
-    '🏠 PRINTED IN OHIO',
+    '🏠 PRINTED IN ALAMEDA, CA',
     '💯 KID-RUN, KID-APPROVED',
     '🚀 NEW DROPS EVERY MONTH',
   ];
