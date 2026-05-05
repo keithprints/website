@@ -1099,7 +1099,12 @@ footer p { color: var(--ink-soft); margin-bottom: 20px; }
   padding: 12px;
   box-shadow: 4px 4px 0 var(--ink);
 }
-.enroll-qr svg { width: 200px; height: 200px; display: block; }
+.enroll-qr-img {
+  display: block;
+  width: 220px;
+  height: 220px;
+  background: var(--paper);
+}
 .enroll-secret { margin-top: 14px; font-size: 12px; }
 .enroll-secret code {
   display: inline-block;

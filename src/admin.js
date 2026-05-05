@@ -128,7 +128,9 @@ async function renderEnroll() {
     factorId = enrollment.factorId;
     content.innerHTML = `
       <div class="enroll-qr-wrap">
-        <div class="enroll-qr">${enrollment.qrSvg}</div>
+        <div class="enroll-qr">
+          <img class="enroll-qr-img" src="${enrollment.qrSvg}" alt="Two-factor QR code" />
+        </div>
         <div class="enroll-secret">
           <div class="field-hint">Can't scan? Enter this secret manually:</div>
           <code>${enrollment.secret}</code>
