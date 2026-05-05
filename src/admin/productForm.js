@@ -1,7 +1,9 @@
-// Modal form for creating or editing a product. Photo URLs are still
-// pasted manually in this phase; Phase 2 will add file upload.
+// Modal form for creating or editing a product. Photo URLs are managed
+// by the image uploader (Supabase Storage); the underlying hidden
+// fields image_url + gallery_urls still flow through collectFormData.
 
 import { createProduct, updateProduct, centsToDollars, slugify } from './products.js';
+import { mountImageUploader } from './imageUploader.js';
 
 const CATEGORIES = ['keychains', 'fidgets', 'figurines', 'ornaments', 'more'];
 const BADGES = ['', 'new', 'hot', 'fav'];
@@ -66,14 +68,13 @@ export function openProductForm(product, { onSaved } = {}) {
             </div>
 
             <div class="field admin-col-full">
-              <label for="f_image_url">Primary image URL</label>
-              <input id="f_image_url" name="image_url" type="text" value="${escapeAttr(p.image_url || '')}" placeholder="https://…" />
+              <input id="f_image_url" name="image_url" type="hidden" value="${escapeAttr(p.image_url || '')}" />
+              <div id="primaryUploaderMount"></div>
             </div>
 
             <div class="field admin-col-full">
-              <label for="f_gallery_urls">Gallery URLs (one per line)</label>
-              <textarea id="f_gallery_urls" name="gallery_urls" rows="3" placeholder="https://…&#10;https://…">${escapeHtml((p.gallery_urls || []).join('\n'))}</textarea>
-              <div class="field-hint">Additional photos shown alongside the primary in the detail modal.</div>
+              <textarea id="f_gallery_urls" name="gallery_urls" hidden>${escapeHtml((p.gallery_urls || []).join('\n'))}</textarea>
+              <div id="galleryUploaderMount"></div>
             </div>
 
             <div class="field admin-col-full">
@@ -164,6 +165,27 @@ function wireForm() {
   // Show/hide customization fields.
   document.getElementById('f_customizable').addEventListener('change', e => {
     document.getElementById('customization_fields').hidden = !e.target.checked;
+  });
+
+  // Mount the photo uploaders. They write back to the hidden
+  // image_url input and the hidden gallery_urls textarea, which
+  // collectFormData reads on submit (no change to that path).
+  const editingProduct = editing;
+  const primaryInitial = editingProduct?.image_url || '';
+  const galleryInitial = Array.isArray(editingProduct?.gallery_urls)
+    ? editingProduct.gallery_urls
+    : [];
+  mountImageUploader(document.getElementById('primaryUploaderMount'), {
+    mode: 'single',
+    initialValue: primaryInitial,
+    targetInputId: 'f_image_url',
+    label: 'Primary image',
+  });
+  mountImageUploader(document.getElementById('galleryUploaderMount'), {
+    mode: 'multi',
+    initialValue: galleryInitial,
+    targetInputId: 'f_gallery_urls',
+    label: 'Gallery images (additional photos)',
   });
 
   // Don't let Enter inside an input submit the form — too easy to

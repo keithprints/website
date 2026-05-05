@@ -42,6 +42,8 @@ These are decisions that emerged from a long conversation with Elliott. Re-litig
 
 8. **Custom admin panel at `/admin`, gated by MFA.** Reverses the original "no admin UI" decision after observing that Supabase's Table Editor is awkward for product management (especially photo URL workflow). The admin panel lives at `/admin` (rewrite to `admin.html` in `vercel.json`), is a separate Vite entry, and uses Supabase email/password + TOTP MFA (Authentication Assurance Level 2). RLS on `products`, `orders`, `order_items` is hardened to require `aal2` for the authenticated role — see migration `004_admin_rls_aal2.sql`. The Supabase Table Editor still works as a fallback because the dashboard's internal admin role bypasses RLS.
 
+9. **Product photos live in Supabase Storage bucket `product-images`.** Public-read bucket (so customer-facing image URLs work without auth), 5 MB per file, MIME types restricted to PNG/JPEG/WEBP/GIF. RLS on `storage.objects` (migration `006_storage_policies.sql`) requires AAL2 for INSERT/UPDATE/DELETE — same MFA gate as the rest of the admin. Images are uploaded via the `/admin` product form's `imageUploader` component, which writes the resulting public URL to `products.image_url` (primary) or `products.gallery_urls[]` (additional). Removed images stay in the bucket as orphans — minor disk waste, not a real cost at this scale; periodic cleanup later if needed.
+
 ## The data model
 
 ### `products` table
@@ -208,7 +210,9 @@ keithprints/
 │   │   ├── auth.js              ← Supabase auth + TOTP MFA wrapper
 │   │   ├── products.js          ← CRUD on products table (admin-only)
 │   │   ├── productList.js       ← admin table with search/filter/inline toggles
-│   │   └── productForm.js       ← create/edit modal form
+│   │   ├── productForm.js       ← create/edit modal form
+│   │   ├── storage.js           ← Supabase Storage upload/delete helpers
+│   │   └── imageUploader.js     ← drag-drop + thumbnail UI (single/multi mode)
 │   └── components/
 │       ├── catalog.js           ← product grid + filters + search
 │       ├── productCard.js
@@ -222,7 +226,9 @@ keithprints/
 │   │   ├── 001_init.sql                ← creates tables, RLS, views
 │   │   ├── 002_product_details.sql     ← gallery_urls + details columns
 │   │   ├── 003_multi_item_orders.sql   ← order_items child table + view rewrites
-│   │   └── 004_admin_rls_aal2.sql      ← tighten admin RLS to require MFA
+│   │   ├── 004_admin_rls_aal2.sql      ← tighten admin RLS to require MFA
+│   │   ├── 005_security_hardening.sql  ← column-level grants + view ACL lockdown
+│   │   └── 006_storage_policies.sql    ← AAL2 RLS on storage.objects for product-images
 │   └── seed.sql                ← demo products to start with
 ├── docs/
 │   ├── SETUP.md                 ← step-by-step external services guide
