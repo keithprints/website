@@ -128,9 +128,7 @@ async function renderEnroll() {
     factorId = enrollment.factorId;
     content.innerHTML = `
       <div class="enroll-qr-wrap">
-        <div class="enroll-qr">
-          <img class="enroll-qr-img" src="${enrollment.qrSvg}" alt="Two-factor QR code" />
-        </div>
+        <div class="enroll-qr">${extractSvgMarkup(enrollment.qrSvg)}</div>
         <div class="enroll-secret">
           <div class="field-hint">Can't scan? Enter this secret manually:</div>
           <code>${enrollment.secret}</code>
@@ -312,6 +310,27 @@ function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[c]));
+}
+
+// Supabase returns totp.qr_code as a data:image/svg+xml URL with raw
+// (unencoded) SVG markup containing double quotes. That can't be used
+// as an <img src> directly because the inner quotes break the attribute.
+// Strip the data-URI prefix and inline the SVG markup instead.
+function extractSvgMarkup(dataUri) {
+  if (typeof dataUri !== 'string') return '';
+  const commaIdx = dataUri.indexOf(',');
+  if (commaIdx < 0) return dataUri;
+  const header = dataUri.slice(0, commaIdx);
+  const after = dataUri.slice(commaIdx + 1);
+  if (header.includes(';base64')) {
+    try { return atob(after); } catch { return after; }
+  }
+  // Some encoders URL-encode the SVG body; most don't. Try to decode
+  // only when the body actually looks percent-encoded.
+  if (after.startsWith('%')) {
+    try { return decodeURIComponent(after); } catch { return after; }
+  }
+  return after;
 }
 
 // React to sign-outs from other tabs / token expiry.

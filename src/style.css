@@ -1099,7 +1099,7 @@ footer p { color: var(--ink-soft); margin-bottom: 20px; }
   padding: 12px;
   box-shadow: 4px 4px 0 var(--ink);
 }
-.enroll-qr-img {
+.enroll-qr svg {
   display: block;
   width: 220px;
   height: 220px;
