@@ -175,19 +175,27 @@ function wireForm() {
     }
   });
 
-  // Numeric-only filter on dollar fields. Strips letters and extra
-  // decimal points as the user types.
-  ['f_sale_price', 'f_unit_cost'].forEach(id => {
+  // Numeric-only filter + select-all on focus for dollar / count fields.
+  // Auto-select makes "click the field, type a new value" overwrite the
+  // existing 0.00 instead of appending to it.
+  ['f_sale_price', 'f_unit_cost', 'f_customization_max_chars', 'f_display_order', 'f_print_time'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    el.addEventListener('input', () => {
-      let v = el.value.replace(/[^0-9.]/g, '');
-      const parts = v.split('.');
-      if (parts.length > 2) v = parts[0] + '.' + parts.slice(1).join('');
-      // Limit to two decimal places.
-      if (parts[1] && parts[1].length > 2) v = parts[0] + '.' + parts[1].slice(0, 2);
-      if (v !== el.value) el.value = v;
+
+    el.addEventListener('focus', () => {
+      // Defer to next tick — some browsers reset selection right after focus.
+      setTimeout(() => { try { el.select(); } catch (_) {} }, 0);
     });
+
+    if (id === 'f_sale_price' || id === 'f_unit_cost') {
+      el.addEventListener('input', () => {
+        let v = el.value.replace(/[^0-9.]/g, '');
+        const parts = v.split('.');
+        if (parts.length > 2) v = parts[0] + '.' + parts.slice(1).join('');
+        if (parts[1] && parts[1].length > 2) v = parts[0] + '.' + parts[1].slice(0, 2);
+        if (v !== el.value) el.value = v;
+      });
+    }
   });
 
   document.getElementById('formClose').addEventListener('click', close);
@@ -232,6 +240,10 @@ function escHandler(e) {
 }
 
 function close() {
+  // TEMPORARY DIAGNOSTIC — logs the call stack so we can see what
+  // triggered an unexpected close. Remove once issue is identified.
+  // eslint-disable-next-line no-console
+  console.log('[admin] productForm close() called', new Error().stack);
   const overlay = document.getElementById('formOverlay');
   if (!overlay) return;
   overlay.classList.remove('open');
