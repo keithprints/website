@@ -240,10 +240,6 @@ function escHandler(e) {
 }
 
 function close() {
-  // TEMPORARY DIAGNOSTIC — logs the call stack so we can see what
-  // triggered an unexpected close. Remove once issue is identified.
-  // eslint-disable-next-line no-console
-  console.log('[admin] productForm close() called', new Error().stack);
   const overlay = document.getElementById('formOverlay');
   if (!overlay) return;
   overlay.classList.remove('open');
