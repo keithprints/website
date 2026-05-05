@@ -1,6 +1,10 @@
 // Modal form for creating or editing a product. Photo URLs are managed
 // by the image uploader (Supabase Storage); the underlying hidden
 // fields image_url + gallery_urls still flow through collectFormData.
+//
+// Per-product colors are gone — colors come from the shop_colors
+// inventory at runtime. This form only carries the multicolor toggle
+// and its dependent fields (price, cost, print time, hint).
 
 import { createProduct, updateProduct, centsToDollars, slugify } from './products.js';
 import { mountImageUploader } from './imageUploader.js';
@@ -77,11 +81,6 @@ export function openProductForm(product, { onSaved } = {}) {
               <div id="galleryUploaderMount"></div>
             </div>
 
-            <div class="field admin-col-full">
-              <label for="f_colors">Colors (comma-separated)</label>
-              <input id="f_colors" name="colors" type="text" value="${escapeAttr((p.colors || []).join(', '))}" placeholder="Blue, Red, Black, Glow" />
-            </div>
-
             <div class="field">
               <label for="f_sale_price">Sale price (USD) *</label>
               <input id="f_sale_price" name="sale_price_dollars" type="text" inputmode="decimal" required value="${centsToDollars(p.sale_price_cents)}" placeholder="8.00" />
@@ -120,6 +119,10 @@ export function openProductForm(product, { onSaved } = {}) {
                 <input type="checkbox" name="customizable" id="f_customizable" ${p.customizable ? 'checked' : ''} />
                 <span>Customizable (engraving)</span>
               </label>
+              <label class="admin-checkbox">
+                <input type="checkbox" name="multicolor_available" id="f_multicolor_available" ${p.multicolor_available ? 'checked' : ''} />
+                <span>Multicolor available</span>
+              </label>
             </div>
 
             <div class="field admin-col-full" id="customization_fields" ${p.customizable ? '' : 'hidden'}>
@@ -128,6 +131,31 @@ export function openProductForm(product, { onSaved } = {}) {
 
               <label for="f_customization_max_chars" style="margin-top:8px">Max characters</label>
               <input id="f_customization_max_chars" name="customization_max_chars" type="number" min="1" max="100" value="${escapeAttr(p.customization_max_chars ?? 8)}" />
+            </div>
+
+            <div class="field admin-col-full multicolor-block" id="multicolor_fields" ${p.multicolor_available ? '' : 'hidden'}>
+              <div class="multicolor-block-title">Multicolor variant</div>
+              <div class="field-hint" style="margin-bottom:10px">All four fields below are required when this product offers multicolor printing.</div>
+              <div class="admin-form-grid">
+                <div class="field">
+                  <label for="f_mc_sale_price">Multicolor sale price (USD) *</label>
+                  <input id="f_mc_sale_price" name="multicolor_sale_price_dollars" type="text" inputmode="decimal" value="${centsToDollars(p.multicolor_sale_price_cents)}" placeholder="32.00" />
+                </div>
+                <div class="field">
+                  <label for="f_mc_unit_cost">Multicolor unit cost (USD) *</label>
+                  <input id="f_mc_unit_cost" name="multicolor_unit_cost_dollars" type="text" inputmode="decimal" value="${centsToDollars(p.multicolor_unit_cost_cents)}" placeholder="3.40" />
+                  <div class="field-hint">PRIVATE.</div>
+                </div>
+                <div class="field">
+                  <label for="f_mc_print_time">Multicolor print time (hours) *</label>
+                  <input id="f_mc_print_time" name="multicolor_print_time_hours" type="number" step="0.1" min="0" value="${escapeAttr(p.multicolor_print_time_hours ?? '')}" placeholder="8.0" />
+                </div>
+                <div class="field admin-col-full">
+                  <label for="f_mc_hint">Multicolor hint (shown to customer)</label>
+                  <input id="f_mc_hint" name="multicolor_hint" type="text" value="${escapeAttr(p.multicolor_hint || '')}" placeholder="Include color choice for body, head, eyes" />
+                  <div class="field-hint">Optional. Shown above the customer's free-text textarea so they know which parts to specify.</div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -167,9 +195,13 @@ function wireForm() {
     document.getElementById('customization_fields').hidden = !e.target.checked;
   });
 
+  // Show/hide multicolor fields.
+  document.getElementById('f_multicolor_available').addEventListener('change', e => {
+    document.getElementById('multicolor_fields').hidden = !e.target.checked;
+  });
+
   // Mount the photo uploaders. They write back to the hidden
-  // image_url input and the hidden gallery_urls textarea, which
-  // collectFormData reads on submit (no change to that path).
+  // image_url input and the hidden gallery_urls textarea.
   const editingProduct = editing;
   const primaryInitial = editingProduct?.image_url || '';
   const galleryInitial = Array.isArray(editingProduct?.gallery_urls)
@@ -188,9 +220,7 @@ function wireForm() {
     label: 'Gallery images (additional photos)',
   });
 
-  // Don't let Enter inside an input submit the form — too easy to
-  // do accidentally while filling fields. Submit must be a click on
-  // Save. Textareas (multi-line) still accept Enter as newline.
+  // Don't let Enter inside an input submit the form.
   form.addEventListener('keydown', e => {
     if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
       e.preventDefault();
@@ -198,18 +228,21 @@ function wireForm() {
   });
 
   // Numeric-only filter + select-all on focus for dollar / count fields.
-  // Auto-select makes "click the field, type a new value" overwrite the
-  // existing 0.00 instead of appending to it.
-  ['f_sale_price', 'f_unit_cost', 'f_customization_max_chars', 'f_display_order', 'f_print_time'].forEach(id => {
+  const numericFields = [
+    'f_sale_price', 'f_unit_cost',
+    'f_mc_sale_price', 'f_mc_unit_cost',
+    'f_customization_max_chars', 'f_display_order', 'f_print_time', 'f_mc_print_time',
+  ];
+  const dollarFields = new Set(['f_sale_price', 'f_unit_cost', 'f_mc_sale_price', 'f_mc_unit_cost']);
+  numericFields.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
 
     el.addEventListener('focus', () => {
-      // Defer to next tick — some browsers reset selection right after focus.
       setTimeout(() => { try { el.select(); } catch (_) {} }, 0);
     });
 
-    if (id === 'f_sale_price' || id === 'f_unit_cost') {
+    if (dollarFields.has(id)) {
       el.addEventListener('input', () => {
         let v = el.value.replace(/[^0-9.]/g, '');
         const parts = v.split('.');
@@ -282,13 +315,17 @@ function collectFormData(form) {
     category: (fd.get('category') || '').toString(),
     image_url: (fd.get('image_url') || '').toString(),
     gallery_urls: (fd.get('gallery_urls') || '').toString(),
-    colors: (fd.get('colors') || '').toString(),
     customizable: fd.get('customizable') === 'on',
     customization_label: (fd.get('customization_label') || '').toString(),
     customization_max_chars: parseInt(fd.get('customization_max_chars') || '8', 10) || 8,
     sale_price_dollars: (fd.get('sale_price_dollars') || '0').toString(),
     unit_cost_dollars: (fd.get('unit_cost_dollars') || '0').toString(),
     print_time_hours: (fd.get('print_time_hours') || '').toString(),
+    multicolor_available: fd.get('multicolor_available') === 'on',
+    multicolor_sale_price_dollars: (fd.get('multicolor_sale_price_dollars') || '').toString(),
+    multicolor_unit_cost_dollars: (fd.get('multicolor_unit_cost_dollars') || '').toString(),
+    multicolor_print_time_hours: (fd.get('multicolor_print_time_hours') || '').toString(),
+    multicolor_hint: (fd.get('multicolor_hint') || '').toString(),
     active: fd.get('active') === 'on',
     featured: fd.get('featured') === 'on',
     badge: (fd.get('badge') || '').toString(),
@@ -306,13 +343,17 @@ function defaultProduct() {
     category: 'keychains',
     image_url: '',
     gallery_urls: [],
-    colors: [],
     customizable: false,
     customization_label: '',
     customization_max_chars: 8,
     sale_price_cents: 0,
     unit_cost_cents: 0,
     print_time_hours: null,
+    multicolor_available: false,
+    multicolor_sale_price_cents: null,
+    multicolor_unit_cost_cents: null,
+    multicolor_print_time_hours: null,
+    multicolor_hint: '',
     active: true,
     featured: false,
     badge: null,

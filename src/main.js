@@ -1,4 +1,5 @@
 import { fetchProducts } from './lib/supabase.js';
+import { fetchShopColors } from './lib/shopColors.js';
 import { renderCatalog } from './components/catalog.js';
 import { openProductModal } from './components/productModal.js';
 import {
@@ -18,6 +19,7 @@ import {
 // ============ APP STATE ============
 const state = {
   products: [],
+  shopColors: [],
   activeCategory: 'all',
   searchQuery: '',
   loading: true,
@@ -199,9 +201,10 @@ function renderMarquee() {
 // the cart with the picked color/customization. The cart drawer is the
 // single path to checkout.
 function handleProductOpen(product) {
-  openProductModal(product, (selection) => {
+  openProductModal(product, state.shopColors, (selection) => {
     addItem({
       product,
+      variant: selection.variant,
       color: selection.color,
       customizationText: selection.customizationText,
       quantity: 1,
@@ -222,6 +225,7 @@ async function handleCheckout() {
       body: JSON.stringify({
         items: cart.map(i => ({
           productId: i.productId,
+          variant: i.variant || 'single',
           color: i.color,
           customizationText: i.customizationText,
           quantity: i.quantity,
@@ -295,7 +299,14 @@ function checkThankYou() {
 async function init() {
   renderShell();
   mountCartDrawer({ onCheckout: handleCheckout });
-  state.products = await fetchProducts();
+  // Fetch products + shop colors in parallel — both feed the catalog
+  // and product detail modal.
+  const [products, shopColors] = await Promise.all([
+    fetchProducts(),
+    fetchShopColors(),
+  ]);
+  state.products = products;
+  state.shopColors = shopColors;
   state.loading = false;
   renderCatalog(state, handleProductOpen);
   checkThankYou();

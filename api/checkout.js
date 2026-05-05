@@ -2,7 +2,8 @@
 // Creates a Stripe Checkout session for a multi-item cart.
 //
 // Body: {
-//   items: [{ productId, color, customizationText, quantity }, ...],
+//   items: [{ productId, variant: 'single' | 'multi',
+//             color, customizationText, quantity }, ...],
 //   deliveryMethod: 'shipping' | 'local',
 //   deliveryZip: '94501'   // required when deliveryMethod === 'local'
 // }
@@ -11,6 +12,11 @@
 // Server re-fetches every product using the service role to lock in
 // price/cost snapshots. Client-supplied prices are ignored. The local
 // delivery zip is re-validated server-side (don't trust the client).
+//
+// Variant-aware pricing: 'multi' uses multicolor_sale_price_cents and
+// multicolor_unit_cost_cents. The DB constraint products_multicolor_complete
+// guarantees those fields are non-null when multicolor_available is true,
+// but we belt-and-suspender check here too.
 
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
@@ -78,7 +84,11 @@ export default async function handler(req, res) {
     const ids = [...new Set(items.map(i => i.productId))];
     const { data: products, error } = await supabase
       .from('products')
-      .select('id, name, description, sale_price_cents, unit_cost_cents, image_url, active')
+      .select(`
+        id, name, description, image_url, active,
+        sale_price_cents, unit_cost_cents,
+        multicolor_available, multicolor_sale_price_cents, multicolor_unit_cost_cents
+      `)
       .in('id', ids);
     if (error) {
       console.error('Supabase fetch error:', error);
@@ -100,8 +110,26 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'One or more items are no longer available.' });
       }
 
+      // Variant + variant-specific pricing
+      const variant = it.variant === 'multi' ? 'multi' : 'single';
+      if (variant === 'multi' && !p.multicolor_available) {
+        return res.status(400).json({ error: 'One or more items are not available in multicolor.' });
+      }
+      const unitAmount = variant === 'multi' ? p.multicolor_sale_price_cents : p.sale_price_cents;
+      const unitCost = variant === 'multi' ? p.multicolor_unit_cost_cents : p.unit_cost_cents;
+      if (variant === 'multi' && (unitAmount == null || unitCost == null)) {
+        // DB constraint should prevent this, but if it slipped through:
+        console.error('Multicolor pricing missing for product', p.id);
+        return res.status(500).json({ error: 'Pricing configuration error. Please contact us.' });
+      }
+
       const descParts = [];
-      if (it.color) descParts.push(`Color: ${it.color}`);
+      if (variant === 'multi') {
+        descParts.push('Multicolor');
+        if (it.color) descParts.push(it.color);
+      } else if (it.color) {
+        descParts.push(`Color: ${it.color}`);
+      }
       if (it.customizationText) descParts.push(`Custom: ${it.customizationText}`);
       const descLine = descParts.length ? ` — ${descParts.join(' · ')}` : '';
 
@@ -109,7 +137,7 @@ export default async function handler(req, res) {
         quantity: it.quantity,
         price_data: {
           currency: 'usd',
-          unit_amount: p.sale_price_cents,
+          unit_amount: unitAmount,
           product_data: {
             name: p.name + descLine,
             description: p.description || undefined,
@@ -120,14 +148,16 @@ export default async function handler(req, res) {
 
       // Single-letter keys keep the JSON well under Stripe's 500-char
       // metadata-value limit, even with long product names.
+      // `v` carries variant; `c` is color or multicolor description per `v`.
       metaItems.push({
         i: p.id,
         n: p.name,
+        v: variant,
         c: it.color || '',
         x: it.customizationText || '',
         q: it.quantity,
-        p: p.sale_price_cents,
-        u: p.unit_cost_cents,
+        p: unitAmount,
+        u: unitCost,
       });
     }
 

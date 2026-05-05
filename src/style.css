@@ -598,19 +598,79 @@ img { max-width: 100%; display: block; }
 .field input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(30,144,255,0.2); }
 .field-hint { margin-top: 6px; font-size: 12px; color: var(--muted); }
 
-.color-options { display: flex; flex-wrap: wrap; gap: 8px; }
-.color-chip {
-  padding: 8px 14px;
+.color-select {
+  width: 100%;
+  padding: 12px 14px;
   border: 2px solid var(--ink);
-  border-radius: 99px;
-  background: var(--paper);
-  font-weight: 600;
-  font-size: 13px;
+  border-radius: 10px;
   font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  background: var(--cream);
+  outline: none;
   transition: all 0.15s ease;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink) 50%),
+                    linear-gradient(135deg, var(--ink) 50%, transparent 50%);
+  background-position: calc(100% - 18px) center, calc(100% - 12px) center;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 36px;
 }
-.color-chip:hover { background: var(--cream-deep); }
-.color-chip.selected { background: var(--ink); color: var(--paper); }
+.color-select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(30,144,255,0.18); }
+
+/* ---- Variant picker (Single / Multicolor) ---- */
+.variant-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.variant-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 2.5px solid var(--ink);
+  border-radius: 12px;
+  background: var(--paper);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+.variant-option:hover { background: var(--cream-deep); }
+.variant-option.selected {
+  background: var(--cream-deep);
+  box-shadow: 3px 3px 0 var(--ink);
+  transform: translate(-1px,-1px);
+}
+.variant-option input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px; height: 18px;
+  flex-shrink: 0;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  margin: 0;
+  position: relative;
+}
+.variant-option input[type="radio"]:checked::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  background: var(--blue);
+  border-radius: 50%;
+}
+.variant-name { font-weight: 700; font-size: 13px; flex: 1; }
+.variant-price {
+  font-family: 'Bungee', sans-serif;
+  font-size: 14px;
+  color: var(--blue-deep);
+}
+
+@media (max-width: 600px) {
+  .variant-options { grid-template-columns: 1fr; }
+}
 
 .modal-price-box {
   display: flex; align-items: center; justify-content: space-between;
@@ -1158,6 +1218,30 @@ footer p { color: var(--ink-soft); margin-bottom: 20px; }
   align-items: center;
   gap: 14px;
 }
+
+.admin-tabs {
+  display: flex;
+  gap: 4px;
+  margin-left: 24px;
+}
+.admin-tab {
+  padding: 8px 16px;
+  font-weight: 700;
+  font-size: 14px;
+  border-radius: 99px;
+  color: var(--muted);
+  transition: background 0.15s ease, color 0.15s ease;
+  text-decoration: none;
+}
+.admin-tab:hover { background: var(--cream-deep); color: var(--ink); }
+.admin-tab.active {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+@media (max-width: 720px) {
+  .admin-tabs { margin-left: 0; order: 3; width: 100%; justify-content: center; }
+}
 .admin-user {
   font-size: 13px;
   color: var(--muted);
@@ -1376,6 +1460,30 @@ footer p { color: var(--ink-soft); margin-bottom: 20px; }
   background: var(--cream);
   border: 2px dashed var(--ink);
   border-radius: 10px;
+}
+
+.multicolor-block {
+  padding: 16px;
+  background: rgba(157,78,221,0.08);
+  border: 2px dashed var(--purple);
+  border-radius: 12px;
+}
+.multicolor-block-title {
+  font-family: 'Bungee', sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: var(--purple-deep);
+  margin-bottom: 4px;
+}
+
+.color-swatch {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  vertical-align: middle;
+  box-shadow: 2px 2px 0 var(--ink);
 }
 .admin-checkbox {
   display: inline-flex;

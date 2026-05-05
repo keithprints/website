@@ -135,6 +135,7 @@ export default async function handler(req, res) {
           order_id: orderInsert.id,
           product_id: it.i || null,
           product_name: it.n || 'Unknown',
+          variant: it.v === 'multi' ? 'multi' : 'single',
           color: it.c || null,
           customization_text: it.x || null,
           quantity: Number(it.q) || 1,

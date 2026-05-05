@@ -5,9 +5,13 @@ import { supabase } from '../lib/supabase.js';
 
 const ALL_COLUMNS = `
   id, created_at, name, slug, description, details, category,
-  image_url, gallery_urls, colors, customizable, customization_label,
+  image_url, gallery_urls, customizable, customization_label,
   customization_max_chars, sale_price_cents, unit_cost_cents,
-  print_time_hours, active, featured, badge, display_order
+  print_time_hours,
+  multicolor_available, multicolor_sale_price_cents,
+  multicolor_unit_cost_cents, multicolor_print_time_hours,
+  multicolor_hint,
+  active, featured, badge, display_order
 `;
 
 export async function listAllProducts() {
@@ -67,8 +71,7 @@ export async function setBadge(id, badge) {
   return updateProduct(id, { badge: badge || null });
 }
 
-// Convert form values (strings, dollars, comma-separated colors) into the
-// shape Postgres expects.
+// Convert form values (strings, dollars) into the shape Postgres expects.
 function toRow(input) {
   const out = { ...input };
 
@@ -80,9 +83,21 @@ function toRow(input) {
     out.unit_cost_cents = dollarsToCents(out.unit_cost_dollars);
     delete out.unit_cost_dollars;
   }
+  if ('multicolor_sale_price_dollars' in out) {
+    const v = out.multicolor_sale_price_dollars;
+    out.multicolor_sale_price_cents =
+      v === '' || v == null ? null : dollarsToCents(v);
+    delete out.multicolor_sale_price_dollars;
+  }
+  if ('multicolor_unit_cost_dollars' in out) {
+    const v = out.multicolor_unit_cost_dollars;
+    out.multicolor_unit_cost_cents =
+      v === '' || v == null ? null : dollarsToCents(v);
+    delete out.multicolor_unit_cost_dollars;
+  }
 
   // Trim text fields; treat empty strings as null where the column is nullable.
-  for (const key of ['description', 'details', 'image_url', 'customization_label', 'badge']) {
+  for (const key of ['description', 'details', 'image_url', 'customization_label', 'badge', 'multicolor_hint']) {
     if (key in out) {
       const v = (out[key] || '').toString().trim();
       out[key] = v.length === 0 ? null : v;
@@ -94,12 +109,9 @@ function toRow(input) {
     out.slug = slugify(out.slug);
   }
 
-  // gallery_urls and colors come from textarea/string — convert if needed.
+  // gallery_urls is a newline-separated string from the hidden textarea.
   if ('gallery_urls' in out && !Array.isArray(out.gallery_urls)) {
     out.gallery_urls = splitLines(out.gallery_urls);
-  }
-  if ('colors' in out && !Array.isArray(out.colors)) {
-    out.colors = splitCsv(out.colors);
   }
 
   // Coerce numerics that came in as strings.
@@ -108,15 +120,38 @@ function toRow(input) {
       out[key] = Number(out[key]);
     }
   }
-  if ('print_time_hours' in out && out.print_time_hours !== null && out.print_time_hours !== '') {
-    out.print_time_hours = Number(out.print_time_hours);
-  } else if ('print_time_hours' in out) {
-    out.print_time_hours = null;
+  for (const key of ['print_time_hours', 'multicolor_print_time_hours']) {
+    if (key in out) {
+      const v = out[key];
+      out[key] = (v === '' || v == null || Number.isNaN(Number(v))) ? null : Number(v);
+    }
   }
 
   // Booleans default to false rather than coming through as 'on'/'off'.
-  for (const key of ['active', 'featured', 'customizable']) {
+  for (const key of ['active', 'featured', 'customizable', 'multicolor_available']) {
     if (key in out) out[key] = Boolean(out[key]);
+  }
+
+  // Enforce: multicolor toggle ON requires all 3 numeric fields.
+  // (The DB has the same constraint as a fail-safe; this gives a
+  // friendlier error message before round-tripping to Postgres.)
+  if (out.multicolor_available) {
+    const missing = [];
+    if (out.multicolor_sale_price_cents == null) missing.push('multicolor sale price');
+    if (out.multicolor_unit_cost_cents == null) missing.push('multicolor unit cost');
+    if (out.multicolor_print_time_hours == null) missing.push('multicolor print time');
+    if (missing.length > 0) {
+      const err = new Error(`Multicolor is enabled but missing: ${missing.join(', ')}.`);
+      err.code = 'multicolor_incomplete';
+      throw err;
+    }
+  } else {
+    // Toggle off — clear the dependent fields so they don't persist
+    // stale values when toggled back on later.
+    if ('multicolor_sale_price_cents' in out) out.multicolor_sale_price_cents = null;
+    if ('multicolor_unit_cost_cents' in out) out.multicolor_unit_cost_cents = null;
+    if ('multicolor_print_time_hours' in out) out.multicolor_print_time_hours = null;
+    if ('multicolor_hint' in out && !out.multicolor_hint) out.multicolor_hint = null;
   }
 
   return out;
@@ -141,13 +176,6 @@ export function slugify(input) {
     .replace(/['"`]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
-}
-
-function splitCsv(value) {
-  return String(value || '')
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean);
 }
 
 function splitLines(value) {

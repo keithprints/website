@@ -1,14 +1,24 @@
 // Cart state — single source of truth, persisted to localStorage.
 // Subscribers (cart drawer, nav badge) get notified on every change.
 //
-// Stored shape:
-//   { items: [...], deliveryMethod: 'shipping' | 'local', deliveryZip: '...' }
+// Stored shape (v2):
+//   {
+//     items: [{ key, productId, productName, productCategory,
+//               productImageUrl, variant: 'single' | 'multi',
+//               color, customizationText, priceCents, quantity }, ...],
+//     deliveryMethod: 'shipping' | 'local',
+//     deliveryZip: '...'
+//   }
 //
-// A previous version stored just the items array directly; loadState handles
-// that legacy shape so anyone with an existing localStorage cart doesn't
-// silently lose it on the next page load.
+// `color` carries either the chosen color name (variant: 'single') or
+// the customer's free-text multicolor description (variant: 'multi').
+//
+// Bumped storage key from kp_cart_v1 → kp_cart_v2 because the item shape
+// changed (added `variant`); old carts from before the color refactor
+// are silently dropped on first read.
 
-const STORAGE_KEY = 'kp_cart_v1';
+const STORAGE_KEY = 'kp_cart_v2';
+const LEGACY_STORAGE_KEYS = ['kp_cart_v1'];
 const subscribers = new Set();
 
 function defaultState() {
@@ -19,21 +29,22 @@ function isValidItem(i) {
   return i && typeof i === 'object' &&
     typeof i.productId === 'string' &&
     typeof i.priceCents === 'number' &&
-    typeof i.quantity === 'number' && i.quantity > 0;
+    typeof i.quantity === 'number' && i.quantity > 0 &&
+    (i.variant === 'single' || i.variant === 'multi');
 }
 
 function loadState() {
+  // Drop any legacy cart payloads — schema change makes them stale.
+  for (const k of LEGACY_STORAGE_KEYS) {
+    try { localStorage.removeItem(k); } catch (_) {}
+  }
+
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return defaultState();
     const parsed = JSON.parse(raw);
 
-    // Legacy: array of items (pre-delivery-method version).
-    if (Array.isArray(parsed)) {
-      return { ...defaultState(), items: parsed.filter(isValidItem) };
-    }
-
-    if (parsed && typeof parsed === 'object') {
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       const items = Array.isArray(parsed.items) ? parsed.items.filter(isValidItem) : [];
       const deliveryMethod = parsed.deliveryMethod === 'local' ? 'local' : 'shipping';
       const deliveryZip = typeof parsed.deliveryZip === 'string' ? parsed.deliveryZip : '';
@@ -67,8 +78,8 @@ function notify() {
   }
 }
 
-function lineKey(productId, color, customizationText) {
-  return `${productId}::${color || ''}::${customizationText || ''}`;
+function lineKey(productId, variant, color, customizationText) {
+  return `${productId}::${variant}::${color || ''}::${customizationText || ''}`;
 }
 
 export function getCart() {
@@ -108,8 +119,15 @@ export function setDeliveryZip(zip) {
   persist();
 }
 
-export function addItem({ product, color = null, customizationText = null, quantity = 1 }) {
-  const key = lineKey(product.id, color, customizationText);
+export function addItem({ product, variant = 'single', color = null, customizationText = null, quantity = 1 }) {
+  const v = variant === 'multi' ? 'multi' : 'single';
+  // Server is authoritative on price; this is for display only. Pick the
+  // matching variant's price to avoid showing the wrong subtotal.
+  const priceCents = v === 'multi'
+    ? (product.multicolor_sale_price_cents ?? product.sale_price_cents)
+    : product.sale_price_cents;
+
+  const key = lineKey(product.id, v, color, customizationText);
   const existing = state.items.find(i => i.key === key);
   if (existing) {
     existing.quantity += quantity;
@@ -120,9 +138,10 @@ export function addItem({ product, color = null, customizationText = null, quant
       productName: product.name,
       productCategory: product.category,
       productImageUrl: product.image_url || null,
+      variant: v,
       color: color || null,
       customizationText: customizationText || null,
-      priceCents: product.sale_price_cents,
+      priceCents,
       quantity,
     });
   }

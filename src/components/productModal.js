@@ -9,11 +9,15 @@ const CATEGORY_EMOJI = {
   more: '🎁',
 };
 
-export function openProductModal(product, onConfirm) {
+// `shopColors` is the active filament inventory, fetched once at app
+// init by main.js and passed through here. Same list shown for every
+// product (per-product color restriction was removed in migration 007).
+export function openProductModal(product, shopColors, onConfirm) {
   const root = document.getElementById('modal-root');
-  const colors = product.colors || [];
+  const colors = Array.isArray(shopColors) ? shopColors : [];
   const showColorPicker = colors.length > 0;
-  const showCustomization = product.customizable;
+  const showCustomization = !!product.customizable;
+  const showVariantPicker = !!product.multicolor_available;
 
   // Build the gallery image list. Main image_url goes first, then any
   // gallery_urls. If neither, we fall back to a category emoji.
@@ -30,6 +34,22 @@ export function openProductModal(product, onConfirm) {
   // Long-form details fall back to the short description so the modal
   // never looks empty.
   const longCopy = product.details || product.description || '';
+
+  // Variant state — defaults to single. The variant determines which
+  // pricing/timing the modal displays and what gets passed to the cart.
+  let variant = 'single';
+
+  function priceForVariant(v) {
+    return v === 'multi'
+      ? (product.multicolor_sale_price_cents ?? product.sale_price_cents)
+      : product.sale_price_cents;
+  }
+
+  function printTimeForVariant(v) {
+    return v === 'multi'
+      ? (product.multicolor_print_time_hours ?? product.print_time_hours)
+      : product.print_time_hours;
+  }
 
   root.innerHTML = `
     <div class="modal-overlay open" id="productModalOverlay">
@@ -56,31 +76,59 @@ export function openProductModal(product, onConfirm) {
         <div class="modal-detail-body">
           <div class="modal-detail-cat">${escapeHtml(categoryLabel(product.category))}</div>
           <h3 class="modal-detail-name">${escapeHtml(product.name)}</h3>
-          <div class="modal-detail-price">${formatPrice(product.sale_price_cents)}</div>
+          <div class="modal-detail-price" id="modalDetailPrice">${formatPrice(priceForVariant(variant))}</div>
 
-          <div class="modal-detail-meta">
-            ${product.print_time_hours ? `<span class="meta-chip">🖨 ~${formatPrintTime(product.print_time_hours)} print</span>` : ''}
-            <span class="meta-chip">📦 Ships in about a week</span>
+          <div class="modal-detail-meta" id="modalDetailMeta">
+            ${renderMeta(product, variant)}
           </div>
 
           ${longCopy ? `<p class="modal-detail-desc">${escapeHtml(longCopy)}</p>` : ''}
 
-          ${showColorPicker ? `
+          ${showVariantPicker ? `
             <div class="field">
-              <label>Pick your color</label>
-              <div class="color-options" id="colorOptions">
-                ${colors.map((c, i) => `
-                  <button class="color-chip ${i === 0 ? 'selected' : ''}" data-color="${escapeHtml(c)}">
-                    ${escapeHtml(c)}
-                  </button>
-                `).join('')}
+              <label>Print style</label>
+              <div class="variant-options" id="variantOptions">
+                <label class="variant-option selected">
+                  <input type="radio" name="variant" value="single" checked />
+                  <span class="variant-name">Single color</span>
+                  <span class="variant-price">${formatPrice(product.sale_price_cents)}</span>
+                </label>
+                <label class="variant-option">
+                  <input type="radio" name="variant" value="multi" />
+                  <span class="variant-name">Multicolor</span>
+                  <span class="variant-price">${formatPrice(product.multicolor_sale_price_cents ?? product.sale_price_cents)}</span>
+                </label>
               </div>
             </div>
           ` : ''}
 
+          <div class="field" id="singleColorField" ${showVariantPicker && variant === 'multi' ? 'hidden' : ''}>
+            ${showColorPicker ? `
+              <label for="colorSelect">Pick your color</label>
+              <select id="colorSelect" class="color-select">
+                ${colors.map((c, i) => `
+                  <option value="${escapeAttr(c.name)}" ${i === 0 ? 'selected' : ''}>${escapeHtml(c.name)}</option>
+                `).join('')}
+              </select>
+            ` : `
+              <div class="field-hint">No colors available right now.</div>
+            `}
+          </div>
+
+          <div class="field" id="multiColorField" hidden>
+            <label for="multicolorInput">${escapeHtml(product.multicolor_hint || 'Describe your multicolor preferences')}</label>
+            <textarea
+              id="multicolorInput"
+              rows="3"
+              maxlength="280"
+              placeholder="e.g. body: forest green, eyes: gold, accents: black"
+            ></textarea>
+            <div class="field-hint">Free-form — describe which parts should be which color.</div>
+          </div>
+
           ${showCustomization ? `
             <div class="field">
-              <label>${escapeHtml(product.customization_label || 'Customization')}</label>
+              <label for="customizationInput">${escapeHtml(product.customization_label || 'Customization')}</label>
               <input
                 id="customizationInput"
                 type="text"
@@ -93,7 +141,7 @@ export function openProductModal(product, onConfirm) {
 
           <div class="modal-price-box">
             <div>Total</div>
-            <div class="modal-price">${formatPrice(product.sale_price_cents)}</div>
+            <div class="modal-price" id="modalTotalPrice">${formatPrice(priceForVariant(variant))}</div>
           </div>
           <div class="modal-ship-note">+ shipping calculated at checkout</div>
         </div>
@@ -106,19 +154,34 @@ export function openProductModal(product, onConfirm) {
     </div>
   `;
 
-  // Track selected color and current main image
-  let selectedColor = colors[0] || null;
+  // Variant radio handlers
+  if (showVariantPicker) {
+    const radios = document.querySelectorAll('input[name="variant"]');
+    radios.forEach(r => {
+      r.addEventListener('change', () => {
+        if (!r.checked) return;
+        variant = r.value;
 
-  if (showColorPicker) {
-    document.querySelectorAll('.color-chip').forEach(chip => {
-      chip.addEventListener('click', () => {
-        document.querySelectorAll('.color-chip').forEach(c => c.classList.remove('selected'));
-        chip.classList.add('selected');
-        selectedColor = chip.dataset.color;
+        // Update selected styling on the labels
+        document.querySelectorAll('.variant-option').forEach(opt => opt.classList.remove('selected'));
+        r.closest('.variant-option').classList.add('selected');
+
+        // Show/hide single vs multi inputs
+        const singleField = document.getElementById('singleColorField');
+        const multiField = document.getElementById('multiColorField');
+        if (singleField) singleField.hidden = (variant === 'multi');
+        if (multiField) multiField.hidden = (variant !== 'multi');
+
+        // Update price + meta
+        document.getElementById('modalDetailPrice').textContent = formatPrice(priceForVariant(variant));
+        document.getElementById('modalTotalPrice').textContent = formatPrice(priceForVariant(variant));
+        const metaEl = document.getElementById('modalDetailMeta');
+        if (metaEl) metaEl.innerHTML = renderMeta(product, variant);
       });
     });
   }
 
+  // Gallery thumbnail switching
   if (galleryImages.length > 1) {
     const mainEl = document.getElementById('galleryMain');
     document.querySelectorAll('.gallery-thumb').forEach(thumb => {
@@ -155,12 +218,41 @@ export function openProductModal(product, onConfirm) {
       ? (document.getElementById('customizationInput').value || '').trim()
       : null;
 
+    let color = null;
+    if (variant === 'multi') {
+      const desc = (document.getElementById('multicolorInput').value || '').trim();
+      if (!desc) {
+        // Don't block — accept empty; the operator can follow up via email.
+        // But surface a gentle nudge before adding.
+        const ok = confirm('Add to cart without a multicolor description? You can also include the description in the engraving field if there is one.');
+        if (!ok) return;
+      }
+      color = desc || null;
+    } else {
+      const select = document.getElementById('colorSelect');
+      color = select ? select.value : null;
+    }
+
     onConfirm({
-      color: selectedColor,
+      variant,
+      color,
       customizationText: customizationText || null,
     });
     close();
   });
+}
+
+function renderMeta(product, variant) {
+  const printTime = variant === 'multi'
+    ? (product.multicolor_print_time_hours ?? product.print_time_hours)
+    : product.print_time_hours;
+
+  const parts = [];
+  if (printTime) {
+    parts.push(`<span class="meta-chip">🖨 ~${formatPrintTime(printTime)} print</span>`);
+  }
+  parts.push('<span class="meta-chip">📦 Ships in about a week</span>');
+  return parts.join('');
 }
 
 function formatPrintTime(hours) {
@@ -177,3 +269,4 @@ function escapeHtml(str) {
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[c]));
 }
+function escapeAttr(str) { return escapeHtml(str); }

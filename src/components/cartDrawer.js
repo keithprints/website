@@ -108,7 +108,18 @@ function render() {
   itemsEl.innerHTML = cart.map(item => {
     const grad = categoryGradient(item.productCategory);
     const emoji = CATEGORY_EMOJI[item.productCategory] || '🎁';
-    const variantLine = [item.color, item.customizationText].filter(Boolean).join(' · ');
+
+    // Variant line: "Multicolor — body: green, eyes: red" or
+    // "Single color — Blue", with customization appended.
+    const variantLabel = item.variant === 'multi' ? 'Multicolor' : null;
+    const colorBits = item.color ? [item.color] : [];
+    const variantPieces = [
+      variantLabel,
+      colorBits.join(', '),
+      item.customizationText,
+    ].filter(Boolean);
+    const variantLine = variantPieces.join(' · ');
+
     return `
       <div class="cart-item" data-key="${escapeHtml(item.key)}">
         <div class="cart-item-img" style="background:${grad}">

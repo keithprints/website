@@ -23,6 +23,9 @@ import {
 import { mountProductList, refreshList } from './admin/productList.js';
 import { openProductForm } from './admin/productForm.js';
 import { deleteProduct } from './admin/products.js';
+import { mountColorList, refreshColorList } from './admin/colorList.js';
+import { openColorForm } from './admin/colorForm.js';
+import { deleteShopColor } from './admin/shopColors.js';
 
 const root = () => document.getElementById('admin-app');
 
@@ -255,6 +258,13 @@ async function renderChallenge() {
 }
 
 // ============ ADMIN SHELL ============
+
+// Tab routing: hash drives which page is shown so the operator can
+// bookmark /admin#colors or refresh and stay on the same tab.
+function currentTab() {
+  return window.location.hash === '#colors' ? 'colors' : 'products';
+}
+
 async function renderAdminShell() {
   const user = await getCurrentUser();
   root().innerHTML = `
@@ -264,6 +274,10 @@ async function renderAdminShell() {
           <span class="admin-brand-mark">🖨</span>
           <span class="admin-brand-text">Keith Prints — Admin</span>
         </div>
+        <nav class="admin-tabs">
+          <a href="#products" class="admin-tab" data-tab="products">Products</a>
+          <a href="#colors" class="admin-tab" data-tab="colors">Colors</a>
+        </nav>
         <div class="admin-header-right">
           <a href="/" class="admin-link" target="_blank" rel="noopener">View site ↗</a>
           <span class="admin-user">${escapeHtml(user?.email || '')}</span>
@@ -272,11 +286,7 @@ async function renderAdminShell() {
       </div>
     </header>
     <main class="admin-main">
-      <div class="admin-section-head">
-        <h2>Products</h2>
-        <p class="admin-sub">Add, edit, hide, or remove items in the catalog.</p>
-      </div>
-      <div id="productListRoot"></div>
+      <div id="adminPageRoot"></div>
     </main>
   `;
 
@@ -285,6 +295,75 @@ async function renderAdminShell() {
     route();
   });
 
+  // Tab activation
+  function highlightTab() {
+    const tab = currentTab();
+    document.querySelectorAll('.admin-tab').forEach(el => {
+      el.classList.toggle('active', el.dataset.tab === tab);
+    });
+  }
+  highlightTab();
+  window.addEventListener('hashchange', () => {
+    highlightTab();
+    renderActiveTab();
+  });
+
+  await renderActiveTab();
+}
+
+async function renderActiveTab() {
+  const pageRoot = document.getElementById('adminPageRoot');
+  if (!pageRoot) return;
+  const tab = currentTab();
+
+  if (tab === 'colors') {
+    pageRoot.innerHTML = `
+      <div class="admin-section-head">
+        <h2>Colors</h2>
+        <p class="admin-sub">The filament inventory shown to customers when they pick a color.</p>
+      </div>
+      <div id="colorListRoot"></div>
+    `;
+    await mountColorList(document.getElementById('colorListRoot'), {
+      onCreate: () => {
+        openColorForm(null, {
+          onSaved: async () => {
+            await refreshColorList();
+            showToast('Color added', '🎨');
+          },
+        });
+      },
+      onEdit: (color) => {
+        openColorForm(color, {
+          onSaved: async () => {
+            await refreshColorList();
+            showToast('Saved', '✓');
+          },
+        });
+      },
+      onDelete: async (color) => {
+        const ok = confirm(`Delete "${color.name}"?\n\nThis removes the color from the picker entirely. If you just want to hide it for a while, toggle Active off instead. Existing orders that referenced this color are unaffected (their color is snapshotted into order_items).`);
+        if (!ok) return;
+        try {
+          await deleteShopColor(color.id);
+          await refreshColorList();
+          showToast('Color deleted', '🗑');
+        } catch (err) {
+          alert(`Delete failed: ${err.message}`);
+        }
+      },
+    });
+    return;
+  }
+
+  // Default: products
+  pageRoot.innerHTML = `
+    <div class="admin-section-head">
+      <h2>Products</h2>
+      <p class="admin-sub">Add, edit, hide, or remove items in the catalog.</p>
+    </div>
+    <div id="productListRoot"></div>
+  `;
   await mountProductList(document.getElementById('productListRoot'), {
     onCreate: () => {
       openProductForm(null, {
