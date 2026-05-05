@@ -1,0 +1,24 @@
+-- ============================================================
+-- Keith Prints — Patch: anon SELECT on shop_colors.active
+-- Run AFTER 007_shop_colors.sql in Supabase SQL Editor.
+--
+-- Migration 007 revoked all grants from anon on shop_colors and
+-- re-granted only the customer-visible display columns. The
+-- application's fetchShopColors query filters .eq('active', true)
+-- as a defense-in-depth check (the RLS policy already filters anon
+-- to active rows, but the application filter also handles the
+-- edge case where the operator is signed in as authenticated and
+-- the same Supabase client picks up the AAL2 session).
+--
+-- PostgREST requires SELECT grants on columns referenced in the
+-- WHERE clause, not just the SELECT list. Without this grant the
+-- query errors with "permission denied for column active" — the
+-- error is swallowed in the client and the UI shows "No colors
+-- available right now."
+--
+-- Granting SELECT on `active` doesn't leak sensitive info (anon
+-- already only sees active=true rows due to RLS) and there's no
+-- UPDATE grant, so anon can't manipulate it.
+-- ============================================================
+
+grant select (active) on public.shop_colors to anon;
