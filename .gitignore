@@ -7,3 +7,12 @@ dist/
 .vercel
 *.log
 .claude/settings.local.json
+
+# Working memory — kept locally, not published.
+# These files exist to give Claude Code context across sessions and to
+# capture queued work; they are not necessary for the site to build or
+# run. Leaving them out of git keeps the repo focused on shippable code.
+CLAUDE.md
+docs/PUNCHLIST.md
+docs/CLAUDE_CODE_FIRST_SESSION.md
+docs/original_prototype.html
