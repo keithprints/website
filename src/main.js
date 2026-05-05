@@ -123,7 +123,7 @@ function renderShell() {
           <div class="step">
             <span class="step-num">02</span>
             <h3>I Print It</h3>
-            <p>I get the order on my phone, fire up the printer, and start making your stuff. Most prints take 4-12 hours.</p>
+            <p>I get the order, fire up the printer, and start making your stuff. Most prints take 4-12 hours and ship soon after.</p>
           </div>
           <div class="step">
             <span class="step-num">03</span>
@@ -137,7 +137,7 @@ function renderShell() {
     <footer id="contact">
       <div class="foot-inner">
         <h4>Keith<span style="color:var(--blue)">Prints</span></h4>
-        <p>Cool things, 3D printed in a garage in Ohio, just for you.</p>
+        <p>Cool things, 3D printed in Alameda, California, just for you.</p>
         <div class="foot-links">
           <a href="#shop">Shop</a>
           <a href="#how">How It Works</a>
