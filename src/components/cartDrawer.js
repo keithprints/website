@@ -242,8 +242,13 @@ function render() {
     });
   }
 
-  document.getElementById('cartCheckoutBtn').addEventListener('click', () => {
-    if (!checkoutEnabled) return;
+  // Read the button's *live* disabled state at click time, not the
+  // closure value captured at render time. updateZipFeedback toggles
+  // disabled in place when the user types a valid zip, so the closure
+  // variable would be stale.
+  const checkoutBtn = document.getElementById('cartCheckoutBtn');
+  checkoutBtn.addEventListener('click', () => {
+    if (checkoutBtn.disabled) return;
     if (onCheckoutCallback) onCheckoutCallback();
   });
 }
