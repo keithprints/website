@@ -104,27 +104,39 @@ export function openProductModal(product, shopColors, onConfirm) {
 
           <div class="field" id="singleColorField" ${showVariantPicker && variant === 'multi' ? 'hidden' : ''}>
             ${showColorPicker ? `
-              <label for="colorSelect">Pick your color</label>
-              <select id="colorSelect" class="color-select">
+              <label>Pick your color</label>
+              <div class="color-grid" id="colorGrid" role="radiogroup" aria-label="Color">
                 ${colors.map((c, i) => `
-                  <option value="${escapeAttr(c.name)}" ${i === 0 ? 'selected' : ''}>${escapeHtml(c.name)}</option>
+                  <button
+                    type="button"
+                    class="color-tile ${i === 0 ? 'selected' : ''}"
+                    data-color="${escapeAttr(c.name)}"
+                    role="radio"
+                    aria-checked="${i === 0 ? 'true' : 'false'}"
+                  >
+                    <span class="color-swatch-dot" style="${swatchStyle(c.swatch_hex)}"></span>
+                    <span class="color-tile-name">${escapeHtml(c.name)}</span>
+                  </button>
                 `).join('')}
-              </select>
+              </div>
             ` : `
               <div class="field-hint">No colors available right now.</div>
             `}
           </div>
 
           <div class="field" id="multiColorField" hidden>
-            <label for="multicolorInput">${escapeHtml(product.multicolor_hint || 'Describe your multicolor preferences')}</label>
+            <label for="multicolorInput">${escapeHtml(product.multicolor_hint || 'Describe your multicolor preferences')} *</label>
             <textarea
               id="multicolorInput"
               rows="3"
               maxlength="280"
               placeholder="e.g. body: forest green, eyes: gold, accents: black"
+              required
             ></textarea>
-            <div class="field-hint">Free-form — describe which parts should be which color.</div>
+            <div class="field-hint">Required — describe which parts should be which color so we know what to print.</div>
           </div>
+
+          <div class="modal-inline-error" id="modalInlineError" hidden></div>
 
           ${showCustomization ? `
             <div class="field">
@@ -154,6 +166,35 @@ export function openProductModal(product, shopColors, onConfirm) {
     </div>
   `;
 
+  // Track selected single-mode color via the chip grid.
+  let selectedColor = colors.length > 0 ? colors[0].name : null;
+
+  function clearInlineError() {
+    const el = document.getElementById('modalInlineError');
+    if (el) { el.hidden = true; el.textContent = ''; }
+  }
+
+  function showInlineError(msg) {
+    const el = document.getElementById('modalInlineError');
+    if (!el) return;
+    el.textContent = msg;
+    el.hidden = false;
+  }
+
+  // Wire color chips
+  document.querySelectorAll('.color-tile').forEach(tile => {
+    tile.addEventListener('click', () => {
+      document.querySelectorAll('.color-tile').forEach(t => {
+        t.classList.remove('selected');
+        t.setAttribute('aria-checked', 'false');
+      });
+      tile.classList.add('selected');
+      tile.setAttribute('aria-checked', 'true');
+      selectedColor = tile.dataset.color;
+      clearInlineError();
+    });
+  });
+
   // Variant radio handlers
   if (showVariantPicker) {
     const radios = document.querySelectorAll('input[name="variant"]');
@@ -177,8 +218,16 @@ export function openProductModal(product, shopColors, onConfirm) {
         document.getElementById('modalTotalPrice').textContent = formatPrice(priceForVariant(variant));
         const metaEl = document.getElementById('modalDetailMeta');
         if (metaEl) metaEl.innerHTML = renderMeta(product, variant);
+
+        clearInlineError();
       });
     });
+  }
+
+  // Clear the inline error as soon as the user types in the multicolor box.
+  const multicolorInputEl = document.getElementById('multicolorInput');
+  if (multicolorInputEl) {
+    multicolorInputEl.addEventListener('input', clearInlineError);
   }
 
   // Gallery thumbnail switching
@@ -214,6 +263,8 @@ export function openProductModal(product, shopColors, onConfirm) {
   document.addEventListener('keydown', escHandler);
 
   document.getElementById('confirmBtn').addEventListener('click', () => {
+    clearInlineError();
+
     const customizationText = showCustomization
       ? (document.getElementById('customizationInput').value || '').trim()
       : null;
@@ -222,15 +273,21 @@ export function openProductModal(product, shopColors, onConfirm) {
     if (variant === 'multi') {
       const desc = (document.getElementById('multicolorInput').value || '').trim();
       if (!desc) {
-        // Don't block — accept empty; the operator can follow up via email.
-        // But surface a gentle nudge before adding.
-        const ok = confirm('Add to cart without a multicolor description? You can also include the description in the engraving field if there is one.');
-        if (!ok) return;
+        // Required — don't add to cart with an empty multicolor description,
+        // since we have no way to know what colors to print.
+        showInlineError('Please describe your multicolor preferences before adding to cart.');
+        const el = document.getElementById('multicolorInput');
+        if (el) el.focus();
+        return;
       }
-      color = desc || null;
+      color = desc;
     } else {
-      const select = document.getElementById('colorSelect');
-      color = select ? select.value : null;
+      // Selected color came from the chip grid via selectedColor closure.
+      if (showColorPicker && !selectedColor) {
+        showInlineError('Please pick a color before adding to cart.');
+        return;
+      }
+      color = selectedColor;
     }
 
     onConfirm({
@@ -240,6 +297,16 @@ export function openProductModal(product, shopColors, onConfirm) {
     });
     close();
   });
+}
+
+// Returns inline CSS for a swatch chip. Falls back to a striped pattern
+// when no hex is configured for the color (matches admin colors table).
+function swatchStyle(hex) {
+  const v = (hex || '').trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(v) || /^#[0-9a-fA-F]{3}$/.test(v)) {
+    return `background:${v}`;
+  }
+  return 'background: repeating-linear-gradient(45deg, #ddd 0 4px, #fff 4px 8px)';
 }
 
 function renderMeta(product, variant) {
