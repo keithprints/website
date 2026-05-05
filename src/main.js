@@ -145,7 +145,7 @@ function renderShell() {
           <a href="mailto:keithprints3d@gmail.com">Email Keith Prints</a>
         </div>
         <div class="foot-bottom">
-          Made with <span class="heart">♥</span> by Keith — © 2026 Keith Prints
+          © 2026 Keith Prints
         </div>
       </div>
     </footer>
