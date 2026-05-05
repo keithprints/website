@@ -180,7 +180,13 @@ export default async function handler(req, res) {
     // Don't fall back to req.headers.host — it's attacker-controllable in
     // some proxy configurations, and we'd happily redirect Stripe success
     // /cancel to the spoofed host. SITE_URL is required (validated above).
-    const siteUrl = process.env.SITE_URL;
+    // Also normalize: trim whitespace and strip trailing slashes so we
+    // don't end up with `https://example.com//?checkout=success`.
+    const siteUrl = (process.env.SITE_URL || '').trim().replace(/\/+$/, '');
+    if (!/^https?:\/\/[^\s]+$/i.test(siteUrl)) {
+      console.error('SITE_URL is not a valid URL. Got:', JSON.stringify(process.env.SITE_URL));
+      return res.status(500).json({ error: 'Service misconfigured' });
+    }
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
