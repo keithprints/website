@@ -39,22 +39,19 @@ RLS:
 
 ```
 multicolor_available       boolean default false
-multicolor_sale_price_cents int       -- nullable; falls back to sale_price_cents + ??? if null
-multicolor_unit_cost_cents  int       -- nullable
-multicolor_print_time_hours numeric(4,1)  -- nullable
+multicolor_sale_price_cents int       -- required when multicolor_available is true
+multicolor_unit_cost_cents  int       -- required when multicolor_available is true
+multicolor_print_time_hours numeric(4,1)  -- required when multicolor_available is true
+multicolor_hint            text       -- e.g. "Include color choice for body, head, eyes"
 ```
 
-Default fallback math is debatable — leaving fields nullable lets us decide per product, with a sensible default applied in the form (e.g., 4× single price, 4× single time) that the operator can override.
+If `multicolor_available` is true, the admin product form **rejects save** when any of the three pricing/timing fields are null (decided 2026-05-05). No runtime fallback math — operator must enter values explicitly so margins stay intentional.
 
 **4. Customer flow on the product detail modal:**
 
 - Mode picker (rendered only if `multicolor_available`): radios "Single color" / "Multicolor".
 - Single mode → one dropdown listing all `active` shop colors.
-- Multicolor mode → **decision deferred** between:
-  - **(a)** Free-text textarea: "Tell me your color preferences" ("body: green, eyes: red, hat: gold"). Lower friction, more operator interpretation.
-  - **(b)** Structured slots: N color-picker rows where each row picks from `shop_colors`, with operator-defined slot labels ("body", "accents", "details"). More precise but requires per-product slot configuration in the admin form.
-
-  Recommendation: ship (a) first; upgrade to (b) only if free-text descriptions become a bottleneck for fulfillment.
+- Multicolor mode → **free-text textarea** (decided 2026-05-05). Customer describes preferences ("body: green, eyes: red, hat: gold"). The operator can guide the customer by setting a per-product hint shown above the textarea — e.g., for a figurine: "Include color choice for body, head, eyes." For a keychain with a logo: "Include color choice for base and logo." The hint lives on the product (new column, e.g., `multicolor_hint text`).
 
 - Price + print time chip in the modal updates based on the mode (single → standard fields; multi → multicolor fields).
 
@@ -77,6 +74,6 @@ Default fallback math is debatable — leaving fields nullable lets us decide pe
 
 ### Open questions before starting
 
-1. Free-text vs. structured multicolor input (recommendation above).
-2. Default fallback math for multicolor pricing when fields are null (e.g., 4×) — or require operator entry.
+1. ~~Free-text vs. structured multicolor input~~ — **resolved 2026-05-05: free-text with per-product hint.**
+2. ~~Default fallback math for multicolor pricing when fields are null~~ — **resolved 2026-05-05: reject save when fields are null. No fallback math.**
 3. Whether to keep order history of legacy single-shape orders untouched (yes — historic data is correct as-is).
