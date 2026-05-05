@@ -119,6 +119,15 @@ function renderTable() {
     });
     tr.querySelector('[data-action="toggle-active"]').addEventListener('change', async e => {
       e.stopPropagation();
+      const wantsOff = !e.target.checked;
+      // Confirm only when hiding from customers — turning back on is no-friction.
+      if (wantsOff) {
+        const ok = confirm(`Hide "${product.name}" from the public catalog?\n\nCustomers won't see it until you toggle it back on.`);
+        if (!ok) {
+          e.target.checked = true;
+          return;
+        }
+      }
       try {
         const updated = await setActive(id, e.target.checked);
         Object.assign(product, updated);
@@ -150,8 +159,10 @@ function renderTable() {
     });
 
     // Clicking the row body (outside form controls) also opens the edit form.
+    // Toggles are styled spans inside <label> elements, so we have to bail
+    // out on label and .admin-toggle as well — not just the underlying inputs.
     tr.addEventListener('click', e => {
-      if (e.target.closest('input, select, button')) return;
+      if (e.target.closest('input, select, button, label, .admin-toggle, .admin-actions')) return;
       onEditCallback && onEditCallback(product);
     });
   });

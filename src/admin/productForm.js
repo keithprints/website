@@ -166,6 +166,30 @@ function wireForm() {
     document.getElementById('customization_fields').hidden = !e.target.checked;
   });
 
+  // Don't let Enter inside an input submit the form — too easy to
+  // do accidentally while filling fields. Submit must be a click on
+  // Save. Textareas (multi-line) still accept Enter as newline.
+  form.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
+      e.preventDefault();
+    }
+  });
+
+  // Numeric-only filter on dollar fields. Strips letters and extra
+  // decimal points as the user types.
+  ['f_sale_price', 'f_unit_cost'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', () => {
+      let v = el.value.replace(/[^0-9.]/g, '');
+      const parts = v.split('.');
+      if (parts.length > 2) v = parts[0] + '.' + parts.slice(1).join('');
+      // Limit to two decimal places.
+      if (parts[1] && parts[1].length > 2) v = parts[0] + '.' + parts[1].slice(0, 2);
+      if (v !== el.value) el.value = v;
+    });
+  });
+
   document.getElementById('formClose').addEventListener('click', close);
   document.getElementById('formCancel').addEventListener('click', close);
   overlay.addEventListener('click', e => {
