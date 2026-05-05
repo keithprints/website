@@ -40,6 +40,8 @@ These are decisions that emerged from a long conversation with Elliott. Re-litig
 
 7. **Local delivery zone is zip-list based.** Customers in `94501` or `94502` get a "Free local pickup/delivery" option in the cart that bypasses the $3.50 standard shipping. The eligible-zip list lives in `src/lib/delivery.js` (`isLocalDeliveryZip`) — that single function is the boundary between today's hardcoded list and a future "within 5 miles of 94501" upgrade (replace the lookup with a geocoding API call; callers don't change). The same module is imported by both the cart drawer and `api/checkout.js`, so server and client stay in sync. The server re-validates the zip before sending the free-shipping option to Stripe — never trust the client-supplied flag alone.
 
+8. **Custom admin panel at `/admin`, gated by MFA.** Reverses the original "no admin UI" decision after observing that Supabase's Table Editor is awkward for product management (especially photo URL workflow). The admin panel lives at `/admin` (rewrite to `admin.html` in `vercel.json`), is a separate Vite entry, and uses Supabase email/password + TOTP MFA (Authentication Assurance Level 2). RLS on `products`, `orders`, `order_items` is hardened to require `aal2` for the authenticated role — see migration `004_admin_rls_aal2.sql`. The Supabase Table Editor still works as a fallback because the dashboard's internal admin role bypasses RLS.
+
 ## The data model
 
 ### `products` table
@@ -172,7 +174,7 @@ These are external services Claude Code cannot configure. Do these in order:
 
 - **Don't add inventory tracking.** Print-to-order means there's no inventory to track.
 - **Don't add user accounts for customers.** Stripe handles email collection; that's enough.
-- **Don't add an admin UI.** Supabase's Table Editor IS the admin UI. Building one in-app is wasted effort.
+- **Custom admin lives at `/admin`** (added in Phase 1, see scoping decision #8). Don't extend it speculatively — only add what serves day-to-day catalog work. Supabase's Table Editor remains a working fallback for anything the admin UI can't do.
 - **Don't add abandoned cart recovery, loyalty programs, or marketing automations.** This is a low-volume hobby shop with bi-annual market peaks. The complexity isn't earned.
 - **Don't move to Next.js without a reason.** Vite + vanilla works. Migration would be premature.
 - **Don't refactor the design system.** The aesthetic was developed with the owner and is intentional. Don't replace Bungee/Bowlby with Inter, don't replace cream with white, don't soften the chunky borders.
@@ -195,11 +197,18 @@ keithprints/
 ├── src/
 │   ├── main.js                  ← entry point, renders shell + wires cart
 │   ├── style.css                ← all styles (no Tailwind, no CSS-in-JS)
+│   ├── main.js                  ← public-site entry
+│   ├── admin.js                 ← admin-panel entry (loaded only at /admin)
 │   ├── lib/
 │   │   ├── supabase.js          ← client wrapper
 │   │   ├── format.js            ← currency, category labels/gradients
 │   │   ├── cart.js              ← cart state (localStorage, pub/sub)
 │   │   └── delivery.js          ← local-zone zip eligibility (shared with api/)
+│   ├── admin/
+│   │   ├── auth.js              ← Supabase auth + TOTP MFA wrapper
+│   │   ├── products.js          ← CRUD on products table (admin-only)
+│   │   ├── productList.js       ← admin table with search/filter/inline toggles
+│   │   └── productForm.js       ← create/edit modal form
 │   └── components/
 │       ├── catalog.js           ← product grid + filters + search
 │       ├── productCard.js
@@ -212,7 +221,8 @@ keithprints/
 │   ├── migrations/
 │   │   ├── 001_init.sql                ← creates tables, RLS, views
 │   │   ├── 002_product_details.sql     ← gallery_urls + details columns
-│   │   └── 003_multi_item_orders.sql   ← order_items child table + view rewrites
+│   │   ├── 003_multi_item_orders.sql   ← order_items child table + view rewrites
+│   │   └── 004_admin_rls_aal2.sql      ← tighten admin RLS to require MFA
 │   └── seed.sql                ← demo products to start with
 ├── docs/
 │   ├── SETUP.md                 ← step-by-step external services guide
