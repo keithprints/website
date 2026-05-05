@@ -46,7 +46,12 @@ export async function getAdminAuthStatus() {
 
 // MFA enrollment flow — call once on first login, after password.
 // Returns { factorId, qrSvg, secret } so the UI can render the QR code.
-export async function enrollTotp({ friendlyName = 'Authenticator' } = {}) {
+//
+// `issuer` controls the label your authenticator shows. We hard-code
+// 'Keith Prints' so the entry is correct even if the Supabase project's
+// Site URL is misconfigured (it defaults to http://localhost:3000 on
+// new projects, which leaks into the QR otherwise).
+export async function enrollTotp({ friendlyName = 'Keith Prints Admin' } = {}) {
   // Clean up any partial unverified enrollment from a previous attempt.
   const { data: factorsData } = await supabase.auth.mfa.listFactors();
   const stale = (factorsData?.all || []).filter(f => f.factor_type === 'totp' && f.status !== 'verified');
@@ -57,6 +62,7 @@ export async function enrollTotp({ friendlyName = 'Authenticator' } = {}) {
   const { data, error } = await supabase.auth.mfa.enroll({
     factorType: 'totp',
     friendlyName,
+    issuer: 'Keith Prints',
   });
   if (error) throw error;
   return {
