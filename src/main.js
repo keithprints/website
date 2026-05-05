@@ -243,19 +243,33 @@ async function handleCheckout() {
 }
 
 // ============ TOAST ============
+// Build the toast with createElement + textContent rather than
+// interpolating into innerHTML — `msg` can carry server error text
+// that originally came from a client-supplied id, so we treat it as
+// untrusted by default.
 let toastTimeout;
 export function showToast(msg, emoji = '✨') {
   const root = document.getElementById('toast-root');
-  root.innerHTML = `
-    <div class="toast show">
-      <span class="toast-emoji">${emoji}</span>
-      <span>${msg}</span>
-    </div>
-  `;
+  if (!root) return;
+  root.innerHTML = '';
+
+  const toast = document.createElement('div');
+  toast.className = 'toast show';
+
+  const emojiSpan = document.createElement('span');
+  emojiSpan.className = 'toast-emoji';
+  emojiSpan.textContent = emoji;
+  toast.appendChild(emojiSpan);
+
+  const msgSpan = document.createElement('span');
+  msgSpan.textContent = msg;
+  toast.appendChild(msgSpan);
+
+  root.appendChild(toast);
+
   clearTimeout(toastTimeout);
   toastTimeout = setTimeout(() => {
-    const t = root.querySelector('.toast');
-    if (t) t.classList.remove('show');
+    toast.classList.remove('show');
     setTimeout(() => { root.innerHTML = ''; }, 400);
   }, 2800);
 }

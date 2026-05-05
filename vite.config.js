@@ -4,7 +4,10 @@ import { resolve } from 'path';
 export default defineConfig({
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    // Don't ship sourcemaps to production — they make reverse-engineering
+    // the admin bundle trivial. Use 'hidden' if you want maps for ops
+    // tooling like Sentry without linking from the JS.
+    sourcemap: false,
     rollupOptions: {
       // Multiple entry points — public site at /, admin at /admin.html.
       // The admin bundle never ships to /; vice versa.

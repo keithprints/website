@@ -49,8 +49,10 @@ export default async function handler(req, res) {
     const rawBody = await readRawBody(req);
     event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
   } catch (err) {
+    // Don't echo verification details — they appear in Stripe's webhook
+    // attempts log and could leak internals.
     console.error('Signature verification failed:', err.message);
-    return res.status(400).json({ error: `Webhook Error: ${err.message}` });
+    return res.status(400).json({ error: 'Invalid signature' });
   }
 
   try {
@@ -58,7 +60,10 @@ export default async function handler(req, res) {
       const session = event.data.object;
       const meta = session.metadata || {};
 
-      // Idempotency: if we've already written this session, skip.
+      // Idempotency: pre-check is best-effort — the real guard is the
+      // unique constraint on stripe_session_id, caught below. This avoids
+      // a race where two concurrent retries both see "no row" and try to
+      // insert.
       const { data: existing } = await supabase
         .from('orders')
         .select('id')
@@ -111,9 +116,18 @@ export default async function handler(req, res) {
         .select('id')
         .single();
 
-      if (orderErr || !orderInsert) {
+      if (orderErr) {
+        // Postgres unique_violation = race with another retry that
+        // already inserted this session. Treat as idempotent success.
+        if (orderErr.code === '23505') {
+          console.log(`Duplicate session ${session.id} (race), treating as success`);
+          return res.status(200).json({ received: true, duplicate: true });
+        }
         console.error('Failed to insert order:', orderErr);
-        return res.status(500).json({ error: 'Database insert failed' });
+        return res.status(500).json({ error: 'Internal error' });
+      }
+      if (!orderInsert) {
+        return res.status(500).json({ error: 'Internal error' });
       }
 
       if (items.length > 0) {
@@ -129,8 +143,12 @@ export default async function handler(req, res) {
         }));
         const { error: itemsErr } = await supabase.from('order_items').insert(itemRows);
         if (itemsErr) {
-          console.error('Failed to insert order_items:', itemsErr);
-          return res.status(500).json({ error: 'Database insert failed for items' });
+          // Roll back the parent — otherwise we end up with a paid order
+          // and no record of what was bought. Stripe will retry the
+          // webhook on our 500, and the next attempt re-runs cleanly.
+          console.error('Failed to insert order_items, rolling back parent:', itemsErr);
+          await supabase.from('orders').delete().eq('id', orderInsert.id);
+          return res.status(500).json({ error: 'Internal error' });
         }
       }
 
@@ -139,7 +157,9 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ received: true });
   } catch (err) {
+    // Generic message — full detail goes to server logs only, not the
+    // Stripe webhook attempts log or any other caller.
     console.error('Webhook handler error:', err);
-    return res.status(500).json({ error: err.message || 'Handler failed' });
+    return res.status(500).json({ error: 'Internal error' });
   }
 }

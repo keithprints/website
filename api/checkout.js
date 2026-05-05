@@ -35,6 +35,18 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Fail loud and early on misconfiguration rather than producing
+  // mysterious 500s mid-checkout. Required env vars must all be set.
+  const missing = [];
+  if (!process.env.STRIPE_SECRET_KEY) missing.push('STRIPE_SECRET_KEY');
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) missing.push('SUPABASE_SERVICE_ROLE_KEY');
+  if (!process.env.VITE_SUPABASE_URL) missing.push('VITE_SUPABASE_URL');
+  if (!process.env.SITE_URL) missing.push('SITE_URL');
+  if (missing.length > 0) {
+    console.error('Checkout misconfigured — missing env vars:', missing.join(', '));
+    return res.status(500).json({ error: 'Service misconfigured' });
+  }
+
   try {
     const { items, deliveryMethod, deliveryZip } = req.body || {};
 
@@ -46,11 +58,11 @@ export default async function handler(req, res) {
     }
     for (const it of items) {
       if (!it || typeof it.productId !== 'string') {
-        return res.status(400).json({ error: 'Invalid cart item: missing productId' });
+        return res.status(400).json({ error: 'Invalid cart item' });
       }
       const qty = Number(it.quantity);
       if (!Number.isInteger(qty) || qty < 1 || qty > MAX_QTY_PER_LINE) {
-        return res.status(400).json({ error: `Invalid quantity for ${it.productId}` });
+        return res.status(400).json({ error: 'Invalid quantity in cart' });
       }
     }
 
@@ -79,10 +91,13 @@ export default async function handler(req, res) {
     for (const it of items) {
       const p = byId[it.productId];
       if (!p) {
-        return res.status(404).json({ error: `Product not found: ${it.productId}` });
+        // Don't echo the client-supplied id back into the error message —
+        // it gets rendered in a toast on the public site and would be a
+        // self-XSS vector if the client controlled it.
+        return res.status(404).json({ error: 'One or more items are no longer available.' });
       }
       if (!p.active) {
-        return res.status(400).json({ error: `Sorry, ${p.name} is no longer available.` });
+        return res.status(400).json({ error: 'One or more items are no longer available.' });
       }
 
       const descParts = [];
@@ -127,7 +142,7 @@ export default async function handler(req, res) {
       const json = JSON.stringify(metaItems[i]);
       if (json.length > STRIPE_METADATA_VALUE_LIMIT) {
         return res.status(400).json({
-          error: `Item too complex: ${metaItems[i].n}. Please simplify or contact us.`,
+          error: 'One or more items have customizations that are too long. Please shorten or contact us.',
         });
       }
       metadata[`item_${i}`] = json;
@@ -162,7 +177,10 @@ export default async function handler(req, res) {
           },
         ];
 
-    const siteUrl = process.env.SITE_URL || `https://${req.headers.host}`;
+    // Don't fall back to req.headers.host — it's attacker-controllable in
+    // some proxy configurations, and we'd happily redirect Stripe success
+    // /cancel to the spoofed host. SITE_URL is required (validated above).
+    const siteUrl = process.env.SITE_URL;
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -177,7 +195,8 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ url: session.url });
   } catch (err) {
+    // Generic message for the client; full detail goes to server logs only.
     console.error('Checkout error:', err);
-    return res.status(500).json({ error: err.message || 'Checkout failed' });
+    return res.status(500).json({ error: 'Checkout failed. Please try again.' });
   }
 }

@@ -37,20 +37,31 @@ async function route() {
 }
 
 // ============ TOAST ============
+// Build via createElement + textContent so messages from Supabase /
+// server errors can't inject HTML if they ever carry untrusted text.
 let toastTimeout;
 function showToast(msg, emoji = '✓') {
   const r = document.getElementById('toast-root');
   if (!r) return;
-  r.innerHTML = `
-    <div class="toast show">
-      <span class="toast-emoji">${emoji}</span>
-      <span>${msg}</span>
-    </div>
-  `;
+  r.innerHTML = '';
+
+  const toast = document.createElement('div');
+  toast.className = 'toast show';
+
+  const emojiSpan = document.createElement('span');
+  emojiSpan.className = 'toast-emoji';
+  emojiSpan.textContent = emoji;
+  toast.appendChild(emojiSpan);
+
+  const msgSpan = document.createElement('span');
+  msgSpan.textContent = msg;
+  toast.appendChild(msgSpan);
+
+  r.appendChild(toast);
+
   clearTimeout(toastTimeout);
   toastTimeout = setTimeout(() => {
-    const t = r.querySelector('.toast');
-    if (t) t.classList.remove('show');
+    toast.classList.remove('show');
     setTimeout(() => { r.innerHTML = ''; }, 400);
   }, 2800);
 }
