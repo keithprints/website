@@ -654,12 +654,12 @@ img { max-width: 100%; display: block; }
   box-shadow: 3px 3px 0 var(--ink);
 }
 .qty-step-btn {
-  width: 38px;
-  height: 38px;
+  width: 30px;
+  height: 30px;
   background: transparent;
   border: none;
   font-family: 'Bungee', sans-serif;
-  font-size: 18px;
+  font-size: 14px;
   line-height: 1;
   cursor: pointer;
   transition: background 0.15s ease;
@@ -668,14 +668,14 @@ img { max-width: 100%; display: block; }
 .qty-step-btn:hover { background: var(--cream-deep); }
 .qty-step-btn:active { background: var(--yellow); }
 .qty-input {
-  width: 56px;
+  width: 38px;
   text-align: center;
   font-family: 'Bungee', sans-serif;
-  font-size: 16px;
+  font-size: 14px;
   border: none;
   border-left: 2px solid var(--ink);
   border-right: 2px solid var(--ink);
-  padding: 8px 0;
+  padding: 6px 0;
   background: transparent;
   outline: none;
 }
