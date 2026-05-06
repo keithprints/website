@@ -201,14 +201,16 @@ function renderMarquee() {
 // single path to checkout.
 function handleProductOpen(product) {
   openProductModal(product, state.shopColors, (selection) => {
+    const qty = Math.max(1, parseInt(selection.quantity, 10) || 1);
     addItem({
       product,
       variant: selection.variant,
       color: selection.color,
       customizationText: selection.customizationText,
-      quantity: 1,
+      quantity: qty,
     });
-    showToast('Added to cart', '✓');
+    const label = qty === 1 ? 'Added to cart' : `Added ${qty} to cart`;
+    showToast(label, '✓');
   });
 }
 

@@ -39,6 +39,11 @@ export function openProductModal(product, shopColors, onConfirm) {
   // pricing/timing the modal displays and what gets passed to the cart.
   let variant = 'single';
 
+  // Quantity: starts at 1; capped to MAX_QTY to match api/checkout's
+  // per-line limit. Stored in closure so confirmBtn can read it.
+  const MAX_QTY = 25;
+  let quantity = 1;
+
   function priceForVariant(v) {
     return v === 'multi'
       ? (product.multicolor_sale_price_cents ?? product.sale_price_cents)
@@ -49,6 +54,10 @@ export function openProductModal(product, shopColors, onConfirm) {
     return v === 'multi'
       ? (product.multicolor_print_time_hours ?? product.print_time_hours)
       : product.print_time_hours;
+  }
+
+  function totalCents() {
+    return priceForVariant(variant) * quantity;
   }
 
   root.innerHTML = `
@@ -151,6 +160,16 @@ export function openProductModal(product, shopColors, onConfirm) {
             </div>
           ` : ''}
 
+          <div class="field qty-field">
+            <label for="qtyInput">Quantity</label>
+            <div class="qty-stepper">
+              <button type="button" class="qty-step-btn" id="qtyDec" aria-label="Decrease quantity">−</button>
+              <input id="qtyInput" class="qty-input" type="text" inputmode="numeric" maxlength="2" value="1" aria-label="Quantity" />
+              <button type="button" class="qty-step-btn" id="qtyInc" aria-label="Increase quantity">+</button>
+            </div>
+            <div class="field-hint">Up to 25 per item.</div>
+          </div>
+
           <div class="modal-price-box">
             <div>Total</div>
             <div class="modal-price" id="modalTotalPrice">${formatPrice(priceForVariant(variant))}</div>
@@ -168,6 +187,21 @@ export function openProductModal(product, shopColors, onConfirm) {
 
   // Track selected single-mode color via the chip grid.
   let selectedColor = colors.length > 0 ? colors[0].name : null;
+
+  function updateTotal() {
+    const totalEl = document.getElementById('modalTotalPrice');
+    if (totalEl) totalEl.textContent = formatPrice(totalCents());
+  }
+
+  function setQuantity(n) {
+    const next = Math.max(1, Math.min(MAX_QTY, Math.floor(Number(n) || 1)));
+    quantity = next;
+    const inputEl = document.getElementById('qtyInput');
+    if (inputEl && inputEl.value !== String(quantity)) {
+      inputEl.value = String(quantity);
+    }
+    updateTotal();
+  }
 
   function clearInlineError() {
     const el = document.getElementById('modalInlineError');
@@ -195,6 +229,32 @@ export function openProductModal(product, shopColors, onConfirm) {
     });
   });
 
+  // Wire quantity stepper. Buttons clamp to [1, MAX_QTY]; the text
+  // input strips non-digits live and revalidates on blur.
+  const qtyInputEl = document.getElementById('qtyInput');
+  document.getElementById('qtyDec').addEventListener('click', () => setQuantity(quantity - 1));
+  document.getElementById('qtyInc').addEventListener('click', () => setQuantity(quantity + 1));
+  if (qtyInputEl) {
+    qtyInputEl.addEventListener('focus', () => {
+      setTimeout(() => { try { qtyInputEl.select(); } catch (_) {} }, 0);
+    });
+    qtyInputEl.addEventListener('input', () => {
+      const cleaned = qtyInputEl.value.replace(/\D/g, '').slice(0, 2);
+      if (cleaned !== qtyInputEl.value) qtyInputEl.value = cleaned;
+      const n = parseInt(cleaned, 10);
+      // Update the closure value silently — full clamping happens on blur
+      // so the user can type freely (typing "12" briefly passes through "1").
+      if (Number.isFinite(n) && n >= 1 && n <= MAX_QTY) {
+        quantity = n;
+        updateTotal();
+      }
+    });
+    qtyInputEl.addEventListener('blur', () => {
+      // Empty / 0 / out-of-range falls back to a clamp.
+      setQuantity(qtyInputEl.value);
+    });
+  }
+
   // Variant radio handlers
   if (showVariantPicker) {
     const radios = document.querySelectorAll('input[name="variant"]');
@@ -213,9 +273,9 @@ export function openProductModal(product, shopColors, onConfirm) {
         if (singleField) singleField.hidden = (variant === 'multi');
         if (multiField) multiField.hidden = (variant !== 'multi');
 
-        // Update price + meta
+        // Update price (per-unit display) + total (per-unit × qty) + meta
         document.getElementById('modalDetailPrice').textContent = formatPrice(priceForVariant(variant));
-        document.getElementById('modalTotalPrice').textContent = formatPrice(priceForVariant(variant));
+        updateTotal();
         const metaEl = document.getElementById('modalDetailMeta');
         if (metaEl) metaEl.innerHTML = renderMeta(product, variant);
 
@@ -294,6 +354,7 @@ export function openProductModal(product, shopColors, onConfirm) {
       variant,
       color,
       customizationText: customizationText || null,
+      quantity,
     });
     close();
   });
