@@ -667,7 +667,9 @@ img { max-width: 100%; display: block; }
 }
 .qty-step-btn:hover { background: var(--cream-deep); }
 .qty-step-btn:active { background: var(--yellow); }
-.qty-input {
+/* Selector intentionally compound (.qty-stepper .qty-input) to beat
+   the generic ".field input { width: 100% }" rule's specificity. */
+.qty-stepper .qty-input {
   width: 38px;
   text-align: center;
   font-family: 'Bungee', sans-serif;
@@ -675,11 +677,13 @@ img { max-width: 100%; display: block; }
   border: none;
   border-left: 2px solid var(--ink);
   border-right: 2px solid var(--ink);
+  border-radius: 0;
   padding: 6px 0;
   background: transparent;
   outline: none;
+  box-shadow: none;
 }
-.qty-input:focus { background: var(--cream); }
+.qty-stepper .qty-input:focus { background: var(--cream); }
 
 /* ---- Inline error inside the product detail modal ---- */
 .modal-inline-error {
