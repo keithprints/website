@@ -5,17 +5,13 @@ import {
   updateQuantity,
   removeItem,
   subscribe,
-  getDeliveryMethod,
   getDeliveryZip,
-  setDeliveryMethod,
   setDeliveryZip,
 } from '../lib/cart.js';
 import { formatPrice, categoryGradient } from '../lib/format.js';
 import {
-  isLocalDeliveryZip,
-  localDeliveryZipList,
-  LOCAL_DELIVERY_LABEL,
-  LOCAL_DELIVERY_DESCRIPTION,
+  shippingInfo,
+  FREE_SHIPPING_THRESHOLD_CENTS,
 } from '../lib/delivery.js';
 
 const CATEGORY_EMOJI = {
@@ -26,12 +22,7 @@ const CATEGORY_EMOJI = {
   more: '🎁',
 };
 
-const STANDARD_SHIPPING_CENTS = 350;
-
 let onCheckoutCallback = null;
-// Track whether the user has interacted with the zip input so we don't
-// show "invalid zip" hints before they've had a chance to type.
-let zipDirty = false;
 
 export function mountCartDrawer({ onCheckout }) {
   onCheckoutCallback = onCheckout;
@@ -157,17 +148,16 @@ function render() {
     });
   });
 
-  // ============ FOOTER (delivery picker + checkout) ============
+  // ============ FOOTER (free-shipping msg + zip + total + checkout) ============
   const subtotal = getSubtotalCents();
   const itemCount = getItemCount();
-  const deliveryMethod = getDeliveryMethod();
   const deliveryZip = getDeliveryZip();
-  const isLocal = deliveryMethod === 'local';
-  const zipValid = isLocal ? isLocalDeliveryZip(deliveryZip) : true;
-  const checkoutEnabled = !isLocal || zipValid;
+  const info = shippingInfo(deliveryZip, subtotal);    // null if zip invalid
+  const dirty = (deliveryZip || '').length > 0;
 
-  const shippingCents = isLocal ? 0 : STANDARD_SHIPPING_CENTS;
-  const total = subtotal + shippingCents;
+  const shippingCents = info ? info.rateCents : null;
+  const totalCents = subtotal + (shippingCents || 0);
+  const checkoutEnabled = info != null;
 
   footEl.innerHTML = `
     <div class="cart-subtotal">
@@ -175,52 +165,25 @@ function render() {
       <span class="cart-subtotal-amount">${formatPrice(subtotal)}</span>
     </div>
 
-    <div class="cart-delivery">
-      <div class="delivery-label">Delivery</div>
+    <div id="cartFreeShipMsg" class="cart-free-ship-msg" hidden></div>
 
-      <label class="delivery-option ${deliveryMethod === 'shipping' ? 'selected' : ''}">
-        <input type="radio" name="delivery" value="shipping" ${deliveryMethod === 'shipping' ? 'checked' : ''} />
-        <span class="delivery-text">
-          <span class="delivery-name">Standard Shipping</span>
-          <span class="delivery-sub">3-5 business days</span>
-        </span>
-        <span class="delivery-price">${formatPrice(STANDARD_SHIPPING_CENTS)}</span>
-      </label>
-
-      <label class="delivery-option ${isLocal ? 'selected' : ''}">
-        <input type="radio" name="delivery" value="local" ${isLocal ? 'checked' : ''} />
-        <span class="delivery-text">
-          <span class="delivery-name">${escapeHtml(LOCAL_DELIVERY_LABEL)}</span>
-          <span class="delivery-sub">${escapeHtml(LOCAL_DELIVERY_DESCRIPTION)}</span>
-        </span>
-        <span class="delivery-price free">FREE</span>
-      </label>
-
-      ${isLocal ? `
-        <div class="delivery-zip-row ${zipValid ? 'valid' : (zipDirty ? 'invalid' : '')}">
-          <label for="zipInput" class="zip-label">ZIP code</label>
-          <input
-            id="zipInput"
-            type="text"
-            inputmode="numeric"
-            maxlength="5"
-            value="${escapeHtml(deliveryZip)}"
-            placeholder="94501"
-            autocomplete="postal-code"
-          />
-          ${!zipValid && zipDirty ? `
-            <div class="zip-hint">
-              Local delivery is available for ZIPs: ${localDeliveryZipList().join(', ')}
-            </div>
-          ` : ''}
-          ${zipValid ? `<div class="zip-hint zip-hint-ok">✓ You're in the local zone</div>` : ''}
-        </div>
-      ` : ''}
+    <div class="cart-shipzip">
+      <label for="zipInput" class="zip-label">Shipping ZIP</label>
+      <input
+        id="zipInput"
+        type="text"
+        inputmode="numeric"
+        maxlength="5"
+        value="${escapeHtml(deliveryZip)}"
+        placeholder="94501"
+        autocomplete="postal-code"
+      />
+      <div id="cartShipLine" class="cart-ship-line"></div>
     </div>
 
     <div class="cart-total-row">
       <span>Total</span>
-      <span class="cart-total-amount">${formatPrice(total)}</span>
+      <span class="cart-total-amount" id="cartTotalAmount">${formatPrice(totalCents)}</span>
     </div>
 
     <button class="btn-primary cart-checkout" id="cartCheckoutBtn" ${checkoutEnabled ? '' : 'disabled'}>
@@ -228,35 +191,24 @@ function render() {
     </button>
   `;
 
-  // Wire delivery radios
-  footEl.querySelectorAll('input[name="delivery"]').forEach(radio => {
-    radio.addEventListener('change', e => {
-      // Reset dirty flag when switching INTO local — fresh chance to type a zip.
-      if (e.target.value === 'local' && deliveryMethod !== 'local') {
-        zipDirty = false;
-      }
-      setDeliveryMethod(e.target.value);
-    });
-  });
+  // Initial paint of contextual hints + free-shipping message
+  paintShippingState(subtotal, deliveryZip, dirty);
 
   // Wire zip input — validate on every keystroke and persist silently
   // (setDeliveryZip doesn't notify, so the drawer doesn't re-render mid-typing
-  // and steal focus). Visual feedback below is updated in place.
+  // and steal focus). Visual feedback is updated in place.
   const zipInput = document.getElementById('zipInput');
   if (zipInput) {
     zipInput.addEventListener('input', e => {
       const value = (e.target.value || '').replace(/\D/g, '').slice(0, 5);
       if (value !== e.target.value) e.target.value = value;
-      zipDirty = value.length > 0;
       setDeliveryZip(value);
-      updateZipFeedback(value);
+      paintShippingState(getSubtotalCents(), value, value.length > 0);
     });
   }
 
   // Read the button's *live* disabled state at click time, not the
-  // closure value captured at render time. updateZipFeedback toggles
-  // disabled in place when the user types a valid zip, so the closure
-  // variable would be stale.
+  // closure value captured at render time.
   const checkoutBtn = document.getElementById('cartCheckoutBtn');
   checkoutBtn.addEventListener('click', () => {
     if (checkoutBtn.disabled) return;
@@ -264,36 +216,65 @@ function render() {
   });
 }
 
-// Update the validity hint, row class, and Checkout-button enabled state
-// without re-rendering the input itself (preserves focus while typing).
-function updateZipFeedback(zip) {
-  const row = document.querySelector('.delivery-zip-row');
+// Updates the contextual hint under the zip input, the free-shipping
+// progress / achievement message above it, the total line, and the
+// Checkout button's disabled state — all in place, without re-rendering
+// the input itself (preserves focus while typing).
+function paintShippingState(subtotalCents, zip, dirty) {
+  const lineEl = document.getElementById('cartShipLine');
+  const msgEl = document.getElementById('cartFreeShipMsg');
+  const totalEl = document.getElementById('cartTotalAmount');
   const checkoutBtn = document.getElementById('cartCheckoutBtn');
-  if (!row || !checkoutBtn) return;
+  if (!lineEl || !msgEl || !totalEl || !checkoutBtn) return;
 
-  const valid = isLocalDeliveryZip(zip);
-  const dirty = zip.length > 0;
+  const info = shippingInfo(zip, subtotalCents);
 
-  row.classList.toggle('valid', valid);
-  row.classList.toggle('invalid', !valid && dirty);
-
-  // Replace just the hint line (it's the last child of the row).
-  const oldHint = row.querySelector('.zip-hint');
-  if (oldHint) oldHint.remove();
-
-  if (valid) {
-    const hint = document.createElement('div');
-    hint.className = 'zip-hint zip-hint-ok';
-    hint.textContent = "✓ You're in the local zone";
-    row.appendChild(hint);
-  } else if (dirty) {
-    const hint = document.createElement('div');
-    hint.className = 'zip-hint';
-    hint.textContent = `Local delivery is available for ZIPs: ${localDeliveryZipList().join(', ')}`;
-    row.appendChild(hint);
+  // ------- Contextual line under the zip input -------
+  lineEl.classList.remove('cart-ship-line-ok', 'cart-ship-line-warn');
+  if (!info) {
+    lineEl.textContent = dirty
+      ? 'Enter a valid 5-digit US ZIP to see shipping cost.'
+      : 'Enter your ZIP for shipping cost.';
+    lineEl.classList.add('cart-ship-line-warn');
+  } else if (info.isLocal) {
+    lineEl.textContent = '✓ Free local pickup/delivery';
+    lineEl.classList.add('cart-ship-line-ok');
+  } else {
+    const rate = info.rateCents === 0 ? 'FREE' : formatPrice(info.rateCents);
+    lineEl.textContent = `Shipping (${info.tierLabel}): ${rate}`;
+    if (info.rateCents === 0) lineEl.classList.add('cart-ship-line-ok');
   }
 
-  checkoutBtn.disabled = !valid;
+  // ------- Free-shipping progress / achievement banner -------
+  const showMessage = !info || (info && !info.isLocal && info.eligibleForFreeShipping)
+    || (!info && subtotalCents > 0);
+
+  if (showMessage && (!info || info.eligibleForFreeShipping)) {
+    if (info && info.freeShippingApplied) {
+      msgEl.hidden = false;
+      msgEl.className = 'cart-free-ship-msg cart-free-ship-achieved';
+      msgEl.textContent = '🎉 You qualify for free shipping!';
+    } else if (subtotalCents > 0 && subtotalCents < FREE_SHIPPING_THRESHOLD_CENTS) {
+      msgEl.hidden = false;
+      msgEl.className = 'cart-free-ship-msg cart-free-ship-progress';
+      const away = FREE_SHIPPING_THRESHOLD_CENTS - subtotalCents;
+      msgEl.textContent = `${formatPrice(away)} more for free shipping ✨`;
+    } else {
+      msgEl.hidden = true;
+      msgEl.textContent = '';
+    }
+  } else {
+    // Hide for local zips (already free) and AK/HI (not eligible).
+    msgEl.hidden = true;
+    msgEl.textContent = '';
+  }
+
+  // ------- Total -------
+  const shippingCents = info ? info.rateCents : 0;
+  totalEl.textContent = formatPrice(subtotalCents + shippingCents);
+
+  // ------- Checkout button -------
+  checkoutBtn.disabled = info == null;
 }
 
 function escapeHtml(str) {

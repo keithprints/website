@@ -20,7 +20,7 @@
 
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
-import { isLocalDeliveryZip, localDeliveryZipList } from '../src/lib/delivery.js';
+import { shippingTier, shippingRateCents } from '../src/lib/delivery.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2024-10-28.acacia',
@@ -34,7 +34,10 @@ const supabase = createClient(
 const MAX_ITEMS = 20;
 const MAX_QTY_PER_LINE = 25;
 const STRIPE_METADATA_VALUE_LIMIT = 500;
-const STANDARD_SHIPPING_CENTS = 350;
+// Shipping rates now come from src/lib/delivery.js's shippingRateCents()
+// and depend on both the customer's zip and the cart subtotal (free
+// shipping over $50 for continental US). The client and server import
+// the same module so display matches what Stripe will charge.
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -72,13 +75,16 @@ export default async function handler(req, res) {
       }
     }
 
-    // Validate delivery method (default to shipping if missing/unknown).
-    const method = deliveryMethod === 'local' ? 'local' : 'shipping';
-    if (method === 'local' && !isLocalDeliveryZip(deliveryZip)) {
-      return res.status(400).json({
-        error: `Local delivery is only available for ZIPs: ${localDeliveryZipList().join(', ')}.`,
-      });
+    // Validate the shipping zip and resolve to a tier. The tier
+    // determines the shipping rate and (separately) whether the
+    // order is local pickup or shipping. We don't trust the
+    // client-supplied deliveryMethod — it's derived server-side
+    // from the zip.
+    const tier = shippingTier(deliveryZip);
+    if (!tier) {
+      return res.status(400).json({ error: 'A valid 5-digit US ZIP is required.' });
     }
+    const method = tier === 'local' ? 'local' : 'shipping';
 
     // One round-trip for every referenced product.
     const ids = [...new Set(items.map(i => i.productId))];
@@ -161,12 +167,22 @@ export default async function handler(req, res) {
       });
     }
 
+    // Compute server-side authoritative shipping cost from the
+    // resolved tier and the verified subtotal (sum of variant-correct
+    // unit prices × quantity for every item in the cart).
+    const subtotalCents = metaItems.reduce(
+      (sum, m) => sum + (Number(m.p) || 0) * (Number(m.q) || 0),
+      0
+    );
+    const shippingCents = shippingRateCents(deliveryZip, subtotalCents);
+
     // Stripe metadata: max 50 keys, max 500 chars per value.
-    // One key per item ("item_0", "item_1", ...) plus a count + delivery info.
+    // One key per item ("item_0", "item_1", ...) plus delivery info.
     const metadata = {
       item_count: String(metaItems.length),
       delivery_method: method,
-      delivery_zip: method === 'local' ? deliveryZip.trim() : '',
+      delivery_tier: tier,
+      delivery_zip: deliveryZip.trim(),
     };
     for (let i = 0; i < metaItems.length; i++) {
       const json = JSON.stringify(metaItems[i]);
@@ -178,34 +194,30 @@ export default async function handler(req, res) {
       metadata[`item_${i}`] = json;
     }
 
-    // Build shipping options based on the chosen delivery method.
-    const shippingOptions = method === 'local'
-      ? [
-          {
-            shipping_rate_data: {
-              type: 'fixed_amount',
-              fixed_amount: { amount: 0, currency: 'usd' },
-              display_name: 'Free local pickup/delivery',
-              delivery_estimate: {
-                minimum: { unit: 'business_day', value: 1 },
-                maximum: { unit: 'business_day', value: 5 },
-              },
-            },
-          },
-        ]
-      : [
-          {
-            shipping_rate_data: {
-              type: 'fixed_amount',
-              fixed_amount: { amount: STANDARD_SHIPPING_CENTS, currency: 'usd' },
-              display_name: 'Standard shipping (3-5 days)',
-              delivery_estimate: {
-                minimum: { unit: 'business_day', value: 3 },
-                maximum: { unit: 'business_day', value: 7 },
-              },
-            },
-          },
-        ];
+    // Build the single shipping option Stripe will charge — variant
+    // text is tier-aware so the customer sees what they paid for in
+    // their receipt.
+    const shippingDisplayName =
+      tier === 'local' ? 'Free local pickup/delivery'
+        : shippingCents === 0 ? 'Free shipping (orders $50+)'
+        : tier === 'california' ? 'Standard shipping — California'
+        : tier === 'continental' ? 'Standard shipping — Continental US'
+        : 'Standard shipping — AK / HI';
+
+    const deliveryEstimate = tier === 'local'
+      ? { minimum: { unit: 'business_day', value: 1 }, maximum: { unit: 'business_day', value: 5 } }
+      : { minimum: { unit: 'business_day', value: 3 }, maximum: { unit: 'business_day', value: 7 } };
+
+    const shippingOptions = [
+      {
+        shipping_rate_data: {
+          type: 'fixed_amount',
+          fixed_amount: { amount: shippingCents, currency: 'usd' },
+          display_name: shippingDisplayName,
+          delivery_estimate: deliveryEstimate,
+        },
+      },
+    ];
 
     // Don't fall back to req.headers.host — it's attacker-controllable in
     // some proxy configurations, and we'd happily redirect Stripe success

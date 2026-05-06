@@ -111,8 +111,14 @@ export function setDeliveryMethod(method) {
 
 export function setDeliveryZip(zip) {
   const next = (typeof zip === 'string' ? zip : '').trim();
-  if (next === state.deliveryZip) return;
+  // Derive deliveryMethod from zip — local zips are pickup/delivery,
+  // anything else is shipping. Drawer no longer exposes a manual radio
+  // so this is the single source of truth.
+  const isLocal = next === '94501' || next === '94502';
+  const nextMethod = isLocal ? 'local' : 'shipping';
+  if (next === state.deliveryZip && nextMethod === state.deliveryMethod) return;
   state.deliveryZip = next;
+  state.deliveryMethod = nextMethod;
   // Persist without notifying. The zip input is the authoritative source of
   // its own value during typing; firing subscribers here would re-render the
   // drawer footer mid-keystroke and steal focus from the input.

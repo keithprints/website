@@ -952,7 +952,67 @@ img { max-width: 100%; display: block; }
   margin-bottom: 14px;
 }
 
-/* ---- Delivery picker ---- */
+/* ---- Free-shipping progress / achievement banner ---- */
+.cart-free-ship-msg {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.cart-free-ship-progress {
+  background: var(--cream-deep);
+  border: 2px dashed var(--ink);
+  color: var(--ink);
+}
+.cart-free-ship-achieved {
+  background: rgba(43,213,102,0.18);
+  border: 2px solid var(--green);
+  color: var(--ink);
+}
+
+/* ---- Shipping ZIP block ---- */
+.cart-shipzip {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 2px dashed var(--ink);
+}
+.cart-shipzip .zip-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.cart-shipzip input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  background: var(--paper);
+  outline: none;
+  letter-spacing: 0.04em;
+}
+.cart-shipzip input:focus {
+  box-shadow: 0 0 0 3px rgba(30,144,255,0.18);
+}
+.cart-ship-line {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  min-height: 16px;
+}
+.cart-ship-line-ok { color: var(--green); }
+.cart-ship-line-warn { color: var(--muted); }
+
+/* ---- Delivery picker (legacy, kept for any leftover references) ---- */
 .cart-delivery {
   margin-top: 14px;
   padding-top: 14px;
