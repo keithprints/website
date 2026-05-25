@@ -502,7 +502,7 @@ img { max-width: 100%; display: block; }
   padding: 22px 22px 16px;
 }
 .gallery-main {
-  height: 280px;
+  aspect-ratio: 1 / 1;
   border: 2.5px solid var(--ink);
   border-radius: 14px;
   background: rgba(255,255,255,0.45);
@@ -510,7 +510,11 @@ img { max-width: 100%; display: block; }
   overflow: hidden;
   box-shadow: 4px 4px 0 var(--ink);
 }
-.gallery-main img { width: 100%; height: 100%; object-fit: cover; }
+/* object-fit: contain shows the whole photo with the category-gradient
+   showing as backdrop on whichever axis has spare room. Container is
+   square so landscape sources letterbox top/bottom, portrait sources
+   letterbox sides — either way the subject is never cropped. */
+.gallery-main img { width: 100%; height: 100%; object-fit: contain; }
 .gallery-main .emoji {
   font-size: 120px;
   filter: drop-shadow(5px 7px 0 rgba(14,14,26,0.25));
@@ -1217,7 +1221,8 @@ footer {
   .search { width: 100%; }
   .marquee-track { font-size: 14px; }
   .how { padding: 56px 18px; }
-  .gallery-main { height: 220px; }
+  /* aspect-ratio: 1/1 stays in effect on mobile — height auto-derives
+     from container width so the modal hero stays square. */
   .gallery-main .emoji { font-size: 90px; }
   .modal-detail-name { font-size: 22px; }
   .modal-detail-price { font-size: 24px; }
