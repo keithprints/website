@@ -111,38 +111,46 @@ export function openProductModal(product, shopColors, onConfirm) {
             </div>
           ` : ''}
 
-          <div class="field" id="singleColorField" ${showVariantPicker && variant === 'multi' ? 'hidden' : ''}>
-            ${showColorPicker ? `
-              <label>Pick your color</label>
-              <div class="color-grid" id="colorGrid" role="radiogroup" aria-label="Color">
-                ${colors.map((c, i) => `
-                  <button
-                    type="button"
-                    class="color-tile ${i === 0 ? 'selected' : ''}"
-                    data-color="${escapeAttr(c.name)}"
-                    role="radio"
-                    aria-checked="${i === 0 ? 'true' : 'false'}"
-                  >
-                    <span class="color-swatch-dot" style="${swatchStyle(c.swatch_hex)}"></span>
-                    <span class="color-tile-name">${escapeHtml(c.name)}</span>
-                  </button>
-                `).join('')}
+          <div class="color-qty-row">
+            <div class="color-qty-row-left">
+              <div class="field" id="singleColorField" ${showVariantPicker && variant === 'multi' ? 'hidden' : ''}>
+                ${showColorPicker ? `
+                  <label for="colorSelect">Pick your color</label>
+                  <div class="color-select-row">
+                    <span class="color-swatch-chip" id="colorSwatchChip" style="${swatchStyle(colors[0]?.swatch_hex)}"></span>
+                    <select id="colorSelect" class="color-select">
+                      ${colors.map((c, i) => `
+                        <option value="${escapeAttr(c.name)}" data-hex="${escapeAttr(c.swatch_hex || '')}" ${i === 0 ? 'selected' : ''}>${escapeHtml(c.name)}</option>
+                      `).join('')}
+                    </select>
+                  </div>
+                ` : `
+                  <div class="field-hint">No colors available right now.</div>
+                `}
               </div>
-            ` : `
-              <div class="field-hint">No colors available right now.</div>
-            `}
-          </div>
 
-          <div class="field" id="multiColorField" hidden>
-            <label for="multicolorInput">${escapeHtml(product.multicolor_hint || 'Describe your multicolor preferences')} *</label>
-            <textarea
-              id="multicolorInput"
-              rows="3"
-              maxlength="280"
-              placeholder="e.g. body: forest green, eyes: gold, accents: black"
-              required
-            ></textarea>
-            <div class="field-hint">Required — describe which parts should be which color so we know what to print.</div>
+              <div class="field" id="multiColorField" hidden>
+                <label for="multicolorInput">${escapeHtml(product.multicolor_hint || 'Describe your multicolor preferences')} *</label>
+                <textarea
+                  id="multicolorInput"
+                  rows="3"
+                  maxlength="280"
+                  placeholder="e.g. body: forest green, eyes: gold, accents: black"
+                  required
+                ></textarea>
+                <div class="field-hint">Required — describe which parts should be which color so we know what to print.</div>
+              </div>
+            </div>
+
+            <div class="field qty-field">
+              <label for="qtyInput">Quantity</label>
+              <div class="qty-stepper">
+                <button type="button" class="qty-step-btn" id="qtyDec" aria-label="Decrease quantity">−</button>
+                <input id="qtyInput" class="qty-input" type="text" inputmode="numeric" maxlength="2" value="1" aria-label="Quantity" />
+                <button type="button" class="qty-step-btn" id="qtyInc" aria-label="Increase quantity">+</button>
+              </div>
+              <div class="field-hint">Up to 25 per item.</div>
+            </div>
           </div>
 
           <div class="modal-inline-error" id="modalInlineError" hidden></div>
@@ -159,16 +167,6 @@ export function openProductModal(product, shopColors, onConfirm) {
               <div class="field-hint">Max ${product.customization_max_chars || 8} characters</div>
             </div>
           ` : ''}
-
-          <div class="field qty-field">
-            <label for="qtyInput">Quantity</label>
-            <div class="qty-stepper">
-              <button type="button" class="qty-step-btn" id="qtyDec" aria-label="Decrease quantity">−</button>
-              <input id="qtyInput" class="qty-input" type="text" inputmode="numeric" maxlength="2" value="1" aria-label="Quantity" />
-              <button type="button" class="qty-step-btn" id="qtyInc" aria-label="Increase quantity">+</button>
-            </div>
-            <div class="field-hint">Up to 25 per item.</div>
-          </div>
 
           <div class="modal-price-box">
             <div>Total</div>
@@ -215,19 +213,22 @@ export function openProductModal(product, shopColors, onConfirm) {
     el.hidden = false;
   }
 
-  // Wire color chips
-  document.querySelectorAll('.color-tile').forEach(tile => {
-    tile.addEventListener('click', () => {
-      document.querySelectorAll('.color-tile').forEach(t => {
-        t.classList.remove('selected');
-        t.setAttribute('aria-checked', 'false');
-      });
-      tile.classList.add('selected');
-      tile.setAttribute('aria-checked', 'true');
-      selectedColor = tile.dataset.color;
+  // Wire color dropdown — store selected color in closure and update
+  // the swatch chip's background to match the chosen option. Each
+  // <option> carries a data-hex attribute so we don't have to re-query
+  // the shopColors array on every change.
+  const colorSelectEl = document.getElementById('colorSelect');
+  if (colorSelectEl) {
+    colorSelectEl.addEventListener('change', () => {
+      selectedColor = colorSelectEl.value;
+      const chip = document.getElementById('colorSwatchChip');
+      const opt = colorSelectEl.options[colorSelectEl.selectedIndex];
+      if (chip && opt) {
+        chip.setAttribute('style', swatchStyle(opt.dataset.hex));
+      }
       clearInlineError();
     });
-  });
+  }
 
   // Wire quantity stepper. Buttons clamp to [1, MAX_QTY]; the text
   // input strips non-digits live and revalidates on blur.
