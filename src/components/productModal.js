@@ -31,9 +31,13 @@ export function openProductModal(product, shopColors, onConfirm) {
   const hasImages = galleryImages.length > 0;
   const gradient = categoryGradient(product.category);
 
-  // Long-form details fall back to the short description so the modal
-  // never looks empty.
-  const longCopy = product.details || product.description || '';
+  // The modal shows both the short description (teaser, same line as
+  // the catalog card) AND the long details, stacked. Either may be
+  // null. If they're identical (operator pasted the same text into
+  // both) we show only one to avoid visible duplication.
+  const shortCopy = (product.description || '').trim();
+  const longCopy  = (product.details || '').trim();
+  const longIsDistinct = longCopy && longCopy !== shortCopy;
 
   // Variant state — defaults to single. The variant determines which
   // pricing/timing the modal displays and what gets passed to the cart.
@@ -87,7 +91,8 @@ export function openProductModal(product, shopColors, onConfirm) {
           <h3 class="modal-detail-name">${escapeHtml(product.name)}</h3>
           <div class="modal-detail-price" id="modalDetailPrice">${formatPrice(priceForVariant(variant))}</div>
 
-          ${longCopy ? `<p class="modal-detail-desc">${escapeHtml(longCopy)}</p>` : ''}
+          ${shortCopy ? `<p class="modal-detail-short">${escapeHtml(shortCopy)}</p>` : ''}
+          ${longIsDistinct ? `<p class="modal-detail-desc">${escapeHtml(longCopy)}</p>` : ''}
 
           ${showVariantPicker ? `
             <div class="field">

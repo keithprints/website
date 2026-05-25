@@ -559,6 +559,13 @@ img { max-width: 100%; display: block; }
   color: var(--blue-deep);
   margin-bottom: 14px;
 }
+.modal-detail-short {
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
 .modal-detail-desc {
   color: var(--ink-soft);
   font-size: 15px;
