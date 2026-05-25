@@ -87,10 +87,6 @@ export function openProductModal(product, shopColors, onConfirm) {
           <h3 class="modal-detail-name">${escapeHtml(product.name)}</h3>
           <div class="modal-detail-price" id="modalDetailPrice">${formatPrice(priceForVariant(variant))}</div>
 
-          <div class="modal-detail-meta" id="modalDetailMeta">
-            ${renderMeta(product, variant)}
-          </div>
-
           ${longCopy ? `<p class="modal-detail-desc">${escapeHtml(longCopy)}</p>` : ''}
 
           ${showVariantPicker ? `
@@ -274,11 +270,9 @@ export function openProductModal(product, shopColors, onConfirm) {
         if (singleField) singleField.hidden = (variant === 'multi');
         if (multiField) multiField.hidden = (variant !== 'multi');
 
-        // Update price (per-unit display) + total (per-unit × qty) + meta
+        // Update price (per-unit display) + total (per-unit × qty)
         document.getElementById('modalDetailPrice').textContent = formatPrice(priceForVariant(variant));
         updateTotal();
-        const metaEl = document.getElementById('modalDetailMeta');
-        if (metaEl) metaEl.innerHTML = renderMeta(product, variant);
 
         clearInlineError();
       });
@@ -369,27 +363,6 @@ function swatchStyle(hex) {
     return `background:${v}`;
   }
   return 'background: repeating-linear-gradient(45deg, #ddd 0 4px, #fff 4px 8px)';
-}
-
-function renderMeta(product, variant) {
-  const printTime = variant === 'multi'
-    ? (product.multicolor_print_time_hours ?? product.print_time_hours)
-    : product.print_time_hours;
-
-  const parts = [];
-  if (printTime) {
-    parts.push(`<span class="meta-chip">🖨 ~${formatPrintTime(printTime)} print</span>`);
-  }
-  parts.push('<span class="meta-chip">📦 Ships in about a week</span>');
-  return parts.join('');
-}
-
-function formatPrintTime(hours) {
-  const h = Number(hours);
-  if (!Number.isFinite(h)) return '';
-  if (h < 1) return `${Math.round(h * 60)}min`;
-  if (Number.isInteger(h)) return `${h}h`;
-  return `${h}h`;
 }
 
 function escapeHtml(str) {

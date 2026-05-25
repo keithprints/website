@@ -559,19 +559,6 @@ img { max-width: 100%; display: block; }
   color: var(--blue-deep);
   margin-bottom: 14px;
 }
-.modal-detail-meta {
-  display: flex; flex-wrap: wrap; gap: 6px;
-  margin-bottom: 16px;
-}
-.meta-chip {
-  display: inline-flex; align-items: center; gap: 4px;
-  background: var(--cream-deep);
-  border: 2px solid var(--ink);
-  border-radius: 99px;
-  padding: 4px 12px;
-  font-size: 12px;
-  font-weight: 600;
-}
 .modal-detail-desc {
   color: var(--ink-soft);
   font-size: 15px;
