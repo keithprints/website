@@ -122,13 +122,13 @@ function renderShell() {
           </div>
           <div class="step">
             <span class="step-num">02</span>
-            <h3>I Print It</h3>
-            <p>I get the order, fire up the printer, and start making your stuff. Most prints take 4-12 hours and ship soon after.</p>
+            <h3>We Print It</h3>
+            <p>We get the order, fire up the printer, and start making your stuff. Most prints take 4-12 hours and ship soon after.</p>
           </div>
           <div class="step">
             <span class="step-num">03</span>
             <h3>It Lands At Your Door</h3>
-            <p>I package it up with a little thank-you note and ship it. You'll have it within a week. Bam.</p>
+            <p>We package it up with a little thank-you note and ship it. You'll have it within a week. Bam.</p>
           </div>
         </div>
       </div>
