@@ -54,12 +54,6 @@ export function openProductModal(product, shopColors, onConfirm) {
       : product.sale_price_cents;
   }
 
-  function printTimeForVariant(v) {
-    return v === 'multi'
-      ? (product.multicolor_print_time_hours ?? product.print_time_hours)
-      : product.print_time_hours;
-  }
-
   function totalCents() {
     return priceForVariant(variant) * quantity;
   }

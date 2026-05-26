@@ -7,10 +7,8 @@ const ALL_COLUMNS = `
   id, created_at, name, slug, description, details, category,
   image_url, gallery_urls, customizable, customization_label,
   customization_max_chars, sale_price_cents, unit_cost_cents,
-  print_time_hours,
   multicolor_available, multicolor_sale_price_cents,
-  multicolor_unit_cost_cents, multicolor_print_time_hours,
-  multicolor_hint,
+  multicolor_unit_cost_cents, multicolor_hint,
   active, featured, badge, display_order
 `;
 
@@ -120,26 +118,18 @@ function toRow(input) {
       out[key] = Number(out[key]);
     }
   }
-  for (const key of ['print_time_hours', 'multicolor_print_time_hours']) {
-    if (key in out) {
-      const v = out[key];
-      out[key] = (v === '' || v == null || Number.isNaN(Number(v))) ? null : Number(v);
-    }
-  }
-
   // Booleans default to false rather than coming through as 'on'/'off'.
   for (const key of ['active', 'featured', 'customizable', 'multicolor_available']) {
     if (key in out) out[key] = Boolean(out[key]);
   }
 
-  // Enforce: multicolor toggle ON requires all 3 numeric fields.
+  // Enforce: multicolor toggle ON requires the two numeric fields.
   // (The DB has the same constraint as a fail-safe; this gives a
   // friendlier error message before round-tripping to Postgres.)
   if (out.multicolor_available) {
     const missing = [];
     if (out.multicolor_sale_price_cents == null) missing.push('multicolor sale price');
     if (out.multicolor_unit_cost_cents == null) missing.push('multicolor unit cost');
-    if (out.multicolor_print_time_hours == null) missing.push('multicolor print time');
     if (missing.length > 0) {
       const err = new Error(`Multicolor is enabled but missing: ${missing.join(', ')}.`);
       err.code = 'multicolor_incomplete';
@@ -150,7 +140,6 @@ function toRow(input) {
     // stale values when toggled back on later.
     if ('multicolor_sale_price_cents' in out) out.multicolor_sale_price_cents = null;
     if ('multicolor_unit_cost_cents' in out) out.multicolor_unit_cost_cents = null;
-    if ('multicolor_print_time_hours' in out) out.multicolor_print_time_hours = null;
     if ('multicolor_hint' in out && !out.multicolor_hint) out.multicolor_hint = null;
   }
 

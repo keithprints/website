@@ -23,8 +23,8 @@ export async function fetchProducts() {
       id, name, slug, description, details, category,
       image_url, gallery_urls,
       customizable, customization_label, customization_max_chars,
-      sale_price_cents, print_time_hours,
-      multicolor_available, multicolor_sale_price_cents, multicolor_print_time_hours, multicolor_hint,
+      sale_price_cents,
+      multicolor_available, multicolor_sale_price_cents, multicolor_hint,
       featured, badge, display_order
     `)
     .eq('active', true)

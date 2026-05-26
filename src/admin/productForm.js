@@ -93,11 +93,6 @@ export function openProductForm(product, { onSaved } = {}) {
             </div>
 
             <div class="field">
-              <label for="f_print_time">Print time (hours)</label>
-              <input id="f_print_time" name="print_time_hours" type="number" step="0.1" min="0" value="${escapeAttr(p.print_time_hours ?? '')}" />
-            </div>
-
-            <div class="field">
               <label for="f_badge">Badge</label>
               <select id="f_badge" name="badge">
                 ${BADGES.map(b => `
@@ -135,7 +130,7 @@ export function openProductForm(product, { onSaved } = {}) {
 
             <div class="field admin-col-full multicolor-block" id="multicolor_fields" ${p.multicolor_available ? '' : 'hidden'}>
               <div class="multicolor-block-title">Multicolor variant</div>
-              <div class="field-hint" style="margin-bottom:10px">All four fields below are required when this product offers multicolor printing.</div>
+              <div class="field-hint" style="margin-bottom:10px">Multicolor sale price and unit cost are required when this product offers multicolor printing.</div>
               <div class="admin-form-grid">
                 <div class="field">
                   <label for="f_mc_sale_price">Multicolor sale price (USD) *</label>
@@ -145,10 +140,6 @@ export function openProductForm(product, { onSaved } = {}) {
                   <label for="f_mc_unit_cost">Multicolor unit cost (USD) *</label>
                   <input id="f_mc_unit_cost" name="multicolor_unit_cost_dollars" type="text" inputmode="decimal" value="${centsToDollars(p.multicolor_unit_cost_cents)}" placeholder="3.40" />
                   <div class="field-hint">PRIVATE.</div>
-                </div>
-                <div class="field">
-                  <label for="f_mc_print_time">Multicolor print time (hours) *</label>
-                  <input id="f_mc_print_time" name="multicolor_print_time_hours" type="number" step="0.1" min="0" value="${escapeAttr(p.multicolor_print_time_hours ?? '')}" placeholder="8.0" />
                 </div>
                 <div class="field admin-col-full">
                   <label for="f_mc_hint">Multicolor hint (shown to customer)</label>
@@ -231,7 +222,7 @@ function wireForm() {
   const numericFields = [
     'f_sale_price', 'f_unit_cost',
     'f_mc_sale_price', 'f_mc_unit_cost',
-    'f_customization_max_chars', 'f_display_order', 'f_print_time', 'f_mc_print_time',
+    'f_customization_max_chars', 'f_display_order',
   ];
   const dollarFields = new Set(['f_sale_price', 'f_unit_cost', 'f_mc_sale_price', 'f_mc_unit_cost']);
   numericFields.forEach(id => {
@@ -320,11 +311,9 @@ function collectFormData(form) {
     customization_max_chars: parseInt(fd.get('customization_max_chars') || '8', 10) || 8,
     sale_price_dollars: (fd.get('sale_price_dollars') || '0').toString(),
     unit_cost_dollars: (fd.get('unit_cost_dollars') || '0').toString(),
-    print_time_hours: (fd.get('print_time_hours') || '').toString(),
     multicolor_available: fd.get('multicolor_available') === 'on',
     multicolor_sale_price_dollars: (fd.get('multicolor_sale_price_dollars') || '').toString(),
     multicolor_unit_cost_dollars: (fd.get('multicolor_unit_cost_dollars') || '').toString(),
-    multicolor_print_time_hours: (fd.get('multicolor_print_time_hours') || '').toString(),
     multicolor_hint: (fd.get('multicolor_hint') || '').toString(),
     active: fd.get('active') === 'on',
     featured: fd.get('featured') === 'on',
@@ -348,11 +337,9 @@ function defaultProduct() {
     customization_max_chars: 8,
     sale_price_cents: 0,
     unit_cost_cents: 0,
-    print_time_hours: null,
     multicolor_available: false,
     multicolor_sale_price_cents: null,
     multicolor_unit_cost_cents: null,
-    multicolor_print_time_hours: null,
     multicolor_hint: '',
     active: true,
     featured: false,
