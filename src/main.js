@@ -112,7 +112,7 @@ function renderShell() {
         <div class="how-head">
           <span class="kicker">HOW IT WORKS</span>
           <h2>Three steps, <em>then it's yours.</em></h2>
-          <p>No subscriptions, no weird sign-ups. Just a kid, a printer, and the thing you ordered.</p>
+          <p>No subscriptions, no weird sign-ups. Just a couple of kids, a printer, and the thing you ordered.</p>
         </div>
         <div class="steps">
           <div class="step">
