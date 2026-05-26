@@ -1213,6 +1213,33 @@ footer {
   height: auto;
   margin: 0 auto 22px;
 }
+.foot-email-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 26px;
+  padding: 14px 26px;
+  background: var(--ink);
+  color: var(--paper);
+  border: 3px solid var(--ink);
+  border-radius: 99px;
+  font-family: 'Bungee', sans-serif;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  box-shadow: 4px 4px 0 var(--ink);
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+.foot-email-btn:hover {
+  background: var(--green);
+  color: var(--ink);
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 var(--ink);
+}
+.foot-email-btn:active {
+  transform: translate(0, 0);
+  box-shadow: 2px 2px 0 var(--ink);
+}
 .foot-links { display: flex; gap: 16px; justify-content: center; margin-bottom: 24px; flex-wrap: wrap; }
 .foot-links a { font-weight: 600; font-size: 14px; padding: 6px 12px; border-radius: 99px; }
 .foot-links a:hover { background: var(--ink); color: var(--paper); }

@@ -137,11 +137,17 @@ function renderShell() {
     <footer id="contact">
       <div class="foot-inner">
         <img class="foot-logo" src="/logo.png" alt="Keith Prints" />
+        <a class="foot-email-btn" href="mailto:keithprints3d@gmail.com">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+            <polyline points="22,6 12,13 2,6"/>
+          </svg>
+          <span>Email Keith Prints</span>
+        </a>
         <div class="foot-links">
           <a href="#shop">Shop</a>
           <a href="#how">How It Works</a>
           <a href="#about">About</a>
-          <a href="mailto:keithprints3d@gmail.com">Email Keith Prints</a>
         </div>
         <div class="foot-bottom">
           © 2026 Keith Prints
